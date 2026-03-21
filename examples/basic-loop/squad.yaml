@@ -1,0 +1,62 @@
+# Basic loop example: Claude Code implements, then reviews its own work.
+# Both agents use the default MCP adapter.
+#
+# Setup:
+#   1. squad init (in your project dir)
+#   2. Copy this file to squad.yaml
+#   3. Add squad-mcp to Claude Code MCP config with SQUAD_AGENT_ID=builder
+#      and a second instance with SQUAD_AGENT_ID=reviewer
+#   4. squad start && squad watch
+
+project: basic-loop
+
+heartbeat_timeout_seconds: 30
+
+recovery:
+  on_agent_offline: reconnect
+  reconnect_attempts: 3
+  reconnect_interval_seconds: 5
+
+agents:
+  builder:
+    adapter: mcp
+
+  reviewer:
+    adapter: mcp
+
+workflow:
+  mode: loop
+  start_at: implement
+  max_iterations: 6
+  on_timeout: stop
+  timeout_seconds: 300
+
+  steps:
+    - id: implement
+      agent: builder
+      action: implement
+      message: |
+        Goal: {goal}
+
+        Previous review notes:
+        {previous_output}
+
+        Implement the requested changes. When done, call mark_done with a
+        brief summary of what you changed.
+      on_pass: review
+      on_fail: implement
+
+    - id: review
+      agent: reviewer
+      action: review
+      message: |
+        Review iteration {iteration}.
+
+        Implementation summary:
+        {previous_output}
+
+        Check the changes carefully. Reply with:
+        - PASS — if the implementation looks correct
+        - FAIL — if changes are needed, with specific notes
+      on_pass: done
+      on_fail: implement
