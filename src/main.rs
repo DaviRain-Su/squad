@@ -51,7 +51,7 @@ fn main() -> Result<()> {
                 bail!("Usage: squad receive <id> [--wait] [--timeout <secs>]");
             }
             let mut wait = false;
-            let mut timeout_secs: u64 = 120;
+            let mut timeout_secs: u64 = 3600;
             let extra: Vec<String> = args.collect();
             let mut i = 0;
             while i < extra.len() {
