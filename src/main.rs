@@ -61,12 +61,26 @@ async fn main() -> Result<()> {
                 bail!("Usage: squad run <goal>\nExample: squad run \"implement login feature\"");
             }
             let paths = squad::daemon::DaemonPaths::new(&workspace);
-            match squad::daemon::send_request(
+            let response = squad::daemon::send_request(
                 paths.socket_path(),
                 &squad::protocol::Request::StartWorkflow { goal },
             )
-            .await?
-            {
+            .await
+            .map_err(|err| {
+                let msg = err.to_string();
+                if msg.contains("failed to connect")
+                    || msg.contains("No such file")
+                    || msg.contains("Connection refused")
+                    || msg.contains("os error 2")
+                {
+                    anyhow::anyhow!(
+                        "Squad daemon is not running. Run squad start first."
+                    )
+                } else {
+                    err
+                }
+            })?;
+            match response {
                 squad::protocol::Response::Ok(_) => {
                     println!("Workflow started. Run 'squad watch' to observe progress.");
                     Ok(())
@@ -97,7 +111,10 @@ async fn main() -> Result<()> {
 }
 
 fn run_setup(workspace: &std::path::Path, sub: &str, extra: Vec<String>) -> Result<()> {
-    use squad::setup::{agent_instructions, setup_mcp_json, update_claude_md, SUPPORTED_AGENTS};
+    use squad::setup::{
+        agent_instructions, setup_hook_agent, setup_mcp_json, update_claude_md, MCP_AGENTS,
+        SUPPORTED_AGENTS,
+    };
 
     // squad setup --list
     if sub == "--list" || sub == "-l" {
@@ -119,17 +136,23 @@ fn run_setup(workspace: &std::path::Path, sub: &str, extra: Vec<String>) -> Resu
 
     let update_claude = extra.iter().any(|arg| arg == "--update-claude-md");
 
-    // Write / check .mcp.json
-    match setup_mcp_json(workspace, sub)? {
-        true => println!(".mcp.json: squad MCP server registered."),
-        false => println!(".mcp.json: squad entry already configured."),
-    }
-
-    // Optionally update CLAUDE.md
-    if update_claude {
-        match update_claude_md(workspace)? {
-            true => println!("CLAUDE.md: Squad Collaboration Protocol section appended."),
-            false => println!("CLAUDE.md: Squad Collaboration Protocol section already present."),
+    if MCP_AGENTS.contains(&sub) {
+        // MCP agent: write .mcp.json
+        match setup_mcp_json(workspace, sub)? {
+            true => println!(".mcp.json: squad MCP server registered."),
+            false => println!(".mcp.json: squad entry already configured."),
+        }
+        if update_claude {
+            match update_claude_md(workspace)? {
+                true => println!("CLAUDE.md: Squad Collaboration Protocol section appended."),
+                false => println!("CLAUDE.md: Squad Collaboration Protocol section already present."),
+            }
+        }
+    } else {
+        // Hook agent: write .squad/hooks/<agent>.sh
+        match setup_hook_agent(workspace, sub)? {
+            true => println!(".squad/hooks/{sub}.sh: hook script created."),
+            false => println!(".squad/hooks/{sub}.sh: hook script already exists."),
         }
     }
 

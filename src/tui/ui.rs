@@ -64,13 +64,17 @@ pub fn render(frame: &mut Frame<'_>, app: &App) {
             })
             .collect()
     };
+    let content_height = message_lines.len() as u16;
+    let inner_height = body[1].height.saturating_sub(2); // subtract top + bottom borders
+    let scroll_offset = content_height.saturating_sub(inner_height);
     let messages = Paragraph::new(message_lines)
         .block(
             Block::default()
                 .title("Message Stream")
                 .borders(Borders::ALL),
         )
-        .wrap(Wrap { trim: true });
+        .wrap(Wrap { trim: true })
+        .scroll((scroll_offset, 0));
     frame.render_widget(messages, body[1]);
 
     let footer = Paragraph::new("[q]uit [s]tatus [l]og [r]estart")

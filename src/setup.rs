@@ -5,6 +5,9 @@ use std::path::Path;
 // Supported agent names in setup command
 pub const SUPPORTED_AGENTS: &[&str] = &["cc", "codex", "gemini", "qwen"];
 
+// Agents that use MCP; all others use the hook adapter.
+pub const MCP_AGENTS: &[&str] = &["cc"];
+
 const CLAUDE_MD_SECTION: &str = r#"
 ## Squad Collaboration Protocol
 
@@ -67,6 +70,35 @@ pub fn setup_mcp_json(workspace: &Path, agent: &str) -> Result<bool> {
     Ok(true)
 }
 
+/// Create .squad/hooks/<agent>.sh for non-MCP agents.
+/// Returns true if newly written, false if already exists.
+pub fn setup_hook_agent(workspace: &Path, agent: &str) -> Result<bool> {
+    let hooks_dir = workspace.join(".squad/hooks");
+    std::fs::create_dir_all(&hooks_dir)
+        .with_context(|| format!("failed to create {}", hooks_dir.display()))?;
+    let script_path = hooks_dir.join(format!("{agent}.sh"));
+    if script_path.exists() {
+        return Ok(false);
+    }
+    let script = format!(
+        "#!/bin/sh\n\
+         # squad hook for {agent}\n\
+         # Called by the squad daemon when a message arrives.\n\
+         # $SQUAD_MESSAGE contains the message content.\n\
+         # Use squad-hook send <to> <message> to reply back to the daemon.\n\
+         echo \"$SQUAD_MESSAGE\" | {agent}\n"
+    );
+    std::fs::write(&script_path, &script)
+        .with_context(|| format!("failed to write {}", script_path.display()))?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&script_path, std::fs::Permissions::from_mode(0o755))
+            .with_context(|| format!("failed to chmod {}", script_path.display()))?;
+    }
+    Ok(true)
+}
+
 /// Append the Squad Collaboration Protocol section to CLAUDE.md if not already present.
 pub fn update_claude_md(workspace: &Path) -> Result<bool> {
     let claude_md = workspace.join("CLAUDE.md");
@@ -93,13 +125,15 @@ pub fn agent_instructions(agent: &str) -> &'static str {
     match agent {
         "cc" => "Claude Code: .mcp.json registered with squad-mcp. \
                  Start the daemon with `squad start`, then launch Claude Code in this directory.",
-        "codex" => "OpenAI Codex CLI: add the squad MCP server to your Codex MCP config \
-                    (typically ~/.codex/config.toml or the project .mcp.json already written).",
-        "gemini" => "Gemini CLI: add the squad MCP server to your Gemini MCP config \
-                     (typically ~/.gemini/settings.json). The .mcp.json written here is \
-                     also picked up automatically by some Gemini CLI versions.",
-        "qwen" => "Qwen agent: configure the squad MCP endpoint in your Qwen agent config. \
-                   The .mcp.json written here provides the squad-mcp command entry point.",
+        "codex" => "Codex CLI (hook adapter): hook script written to .squad/hooks/codex.sh. \
+                    Edit the script to invoke codex with $SQUAD_MESSAGE, then start the daemon \
+                    with `squad start` and run `squad run <goal>` to begin the workflow.",
+        "gemini" => "Gemini CLI (hook adapter): hook script written to .squad/hooks/gemini.sh. \
+                     Edit the script to invoke gemini with $SQUAD_MESSAGE, then start the daemon \
+                     with `squad start` and run `squad run <goal>` to begin the workflow.",
+        "qwen" => "Qwen agent (hook adapter): hook script written to .squad/hooks/qwen.sh. \
+                   Edit the script to invoke qwen with $SQUAD_MESSAGE, then start the daemon \
+                   with `squad start` and run `squad run <goal>` to begin the workflow.",
         _ => "Unknown agent. Run `squad setup --list` for supported agents.",
     }
 }

@@ -128,6 +128,59 @@ agents:
 4. The agent does its work and overwrites the file with its response.
 5. The daemon detects the new content and treats it as the agent's output.
 
+### Writing hook scripts
+
+#### Input
+
+| Source | Value |
+|--------|-------|
+| `$SQUAD_MESSAGE` | The message content dispatched by the workflow |
+| `$SQUAD_HOOK_FROM` | Sender identity for `squad-hook send` (default: `hook`) |
+
+The script receives no positional arguments from squad directly. You may add your own argument conventions (e.g., a `$1` for the target agent name) or hard-code the recipient name.
+
+#### Output
+
+Use `squad-hook send <agent> <message>` to deliver results back to the daemon:
+
+```sh
+squad-hook send cc "done: $RESULT"
+```
+
+The recipient must match an agent name registered in `squad.yaml`. Messages sent this way appear in that agent's mailbox and can be fetched via `check_inbox`.
+
+#### Exit codes
+
+If the hook script exits non-zero, the daemon logs the error. Ensure your script exits 0 on success. Use `set -e` at the top if you want to fail fast on any error:
+
+```sh
+#!/bin/sh
+set -e
+# any failure exits immediately
+```
+
+#### Template
+
+```sh
+#!/bin/sh
+# my-agent.sh — squad hook script template
+#
+# $SQUAD_MESSAGE  — message sent to this agent by the workflow
+
+RESULT=$(do_something "$SQUAD_MESSAGE")
+EXIT_CODE=$?
+
+if [ $EXIT_CODE -eq 0 ]; then
+    squad-hook send cc "Result: PASS
+
+$RESULT"
+else
+    squad-hook send cc "Result: FAIL
+
+$RESULT"
+fi
+```
+
 ### Setting up a watch agent
 
 Any process that can watch a file works. Example with a shell loop:

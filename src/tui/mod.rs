@@ -6,7 +6,7 @@ use std::path::Path;
 use std::time::Duration;
 
 use anyhow::Result;
-use crossterm::event::{self, Event, KeyCode, KeyEventKind};
+use crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
 use crossterm::terminal::{
     disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen,
 };
@@ -44,6 +44,11 @@ fn run_loop(
             if let Event::Key(key) = event::read()? {
                 if key.kind == KeyEventKind::Press {
                     match key.code {
+                        KeyCode::Char('c')
+                            if key.modifiers.contains(KeyModifiers::CONTROL) =>
+                        {
+                            app.should_quit = true;
+                        }
                         KeyCode::Char(ch) => app.on_key(ch),
                         KeyCode::Esc => app.should_quit = true,
                         _ => {}

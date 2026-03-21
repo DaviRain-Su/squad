@@ -7,12 +7,15 @@ class Squad < Formula
   on_macos do
     on_arm do
       url "https://github.com/mco-org/squad/releases/download/v#{version}/squad-aarch64-apple-darwin.tar.gz"
-      # sha256 is updated automatically by the Homebrew bump-formula-pr workflow
+      # sha256 placeholder — update once the v0.1.0 GitHub release tarball is published.
+      # To compute: curl -L <url> | sha256sum
+      # This value is also updated automatically by the Homebrew bump-formula-pr workflow.
       sha256 "0000000000000000000000000000000000000000000000000000000000000000"
     end
 
     on_intel do
       url "https://github.com/mco-org/squad/releases/download/v#{version}/squad-x86_64-apple-darwin.tar.gz"
+      # sha256 placeholder — update once the v0.1.0 GitHub release tarball is published.
       sha256 "0000000000000000000000000000000000000000000000000000000000000000"
     end
   end
@@ -20,6 +23,7 @@ class Squad < Formula
   on_linux do
     on_intel do
       url "https://github.com/mco-org/squad/releases/download/v#{version}/squad-x86_64-unknown-linux-gnu.tar.gz"
+      # sha256 placeholder — update once the v0.1.0 GitHub release tarball is published.
       sha256 "0000000000000000000000000000000000000000000000000000000000000000"
     end
   end

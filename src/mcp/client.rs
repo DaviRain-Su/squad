@@ -93,10 +93,7 @@ impl DaemonClient {
         let stream = UnixStream::connect(self.socket_path())
             .await
             .with_context(|| {
-                format!(
-                    "failed to connect to {}. Run squad start first.",
-                    self.socket_path().display()
-                )
+                "Squad daemon is not running. Run squad start first.".to_string()
             })?;
         let mut reader = BufReader::new(stream);
         let envelope = DaemonEnvelope {
