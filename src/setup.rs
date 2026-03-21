@@ -1,60 +1,52 @@
 use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
 
-#[derive(Debug)]
-pub enum InstallMethod {
-    /// Write a slash command file to the given path
-    SlashCommand { command_path: &'static str },
-    /// Append instructions to a global config .md file
-    AppendConfig { config_path: &'static str },
-}
-
 pub struct Platform {
     pub name: &'static str,
     pub binary: &'static str,
-    pub method: InstallMethod,
+    pub command_path: &'static str, // relative to home dir
+    pub content: &'static str,
 }
 
 pub const PLATFORMS: &[Platform] = &[
     Platform {
         name: "claude",
         binary: "claude",
-        method: InstallMethod::SlashCommand {
-            command_path: ".claude/commands/squad.md",
-        },
+        command_path: ".claude/commands/squad.md",
+        content: SQUAD_MD_CONTENT,
     },
     Platform {
         name: "gemini",
         binary: "gemini",
-        method: InstallMethod::AppendConfig {
-            config_path: ".gemini/GEMINI.md",
-        },
+        command_path: ".gemini/commands/squad.toml",
+        content: SQUAD_TOML_CONTENT,
     },
     Platform {
         name: "codex",
         binary: "codex",
-        method: InstallMethod::SlashCommand {
-            command_path: ".codex/prompts/squad.md",
-        },
+        command_path: ".codex/prompts/squad.md",
+        content: SQUAD_MD_CONTENT,
     },
     Platform {
         name: "opencode",
         binary: "opencode",
-        method: InstallMethod::SlashCommand {
-            command_path: ".config/opencode/commands/squad.md",
-        },
+        command_path: ".config/opencode/commands/squad.md",
+        content: SQUAD_MD_CONTENT,
     },
 ];
 
-pub const SQUAD_COMMAND_CONTENT: &str = r#"---
+/// Markdown format for Claude Code, Codex, OpenCode (uses $ARGUMENTS)
+pub const SQUAD_MD_CONTENT: &str = r#"---
 description: Join squad multi-agent collaboration. Usage: /squad <role> [custom-id]
 ---
+
+The user's input: $ARGUMENTS
 
 You are joining a squad multi-agent collaboration team.
 
 ## Instructions
 
-1. Parse the arguments: $ARGUMENTS
+1. Parse the arguments above.
 
    **If arguments are empty or missing:**
    Run `squad roles` to list available roles, then ask the user which role they want to join as. Do NOT proceed until the user picks a role.
@@ -81,18 +73,43 @@ You are joining a squad multi-agent collaboration team.
 4. After completing any task, always run `squad receive <your-id> --wait` to wait for the next message.
 "#;
 
-const SQUAD_CONFIG_SECTION: &str = "\n## Squad Collaboration
+/// TOML format for Gemini CLI (uses {{args}})
+pub const SQUAD_TOML_CONTENT: &str = r#"description = "Join squad multi-agent collaboration. Usage: /squad <role> [custom-id]"
 
-This project uses squad for multi-agent collaboration.
-When the user asks you to join squad as a role, run: `squad join <role> --role <role>`
-Then follow the role instructions from the output. Key commands:
-- `squad send <your-id> <to> \"<message>\"` — send a message
-- `squad receive <your-id> --wait` — wait for incoming messages
-- `squad agents` — see who is online
-- `squad help` — full command reference
-";
+prompt = """
+The user's input: {{args}}
 
-const SQUAD_CONFIG_MARKER: &str = "## Squad Collaboration";
+You are joining a squad multi-agent collaboration team.
+
+## Instructions
+
+1. Parse the arguments above.
+
+   **If arguments are empty or missing:**
+   Run `squad roles` to list available roles, then ask the user which role they want to join as. Do NOT proceed until the user picks a role.
+
+   **If arguments are provided:**
+   - First word is the role (e.g. manager, worker, inspector)
+   - Optional second word is a custom agent ID
+   - If no custom ID provided, use the role name as your ID
+   - Examples: "manager" → id=manager, role=manager | "worker worker-2" → id=worker-2, role=worker
+
+2. Run these commands in order:
+   a. `squad join <id> --role <role>` — register yourself and read the output
+   b. If role instructions are printed (=== Role Instructions ===), follow them
+   c. If no predefined template exists, **interpret the role using your own knowledge**. Adapt your behavior to what that role would do in a software team. Any role name works — you are not limited to predefined roles.
+   d. `squad agents` — check who else is on the team
+
+3. Communicate using squad commands:
+   - `squad send <your-id> <to> "<message>"` — send a message (use @all to broadcast)
+   - `squad receive <your-id> --wait` — block until a message arrives
+   - `squad agents` — see who is online
+   - `squad pending` — check unread messages
+   - `squad history` — view message history
+
+4. After completing any task, always run `squad receive <your-id> --wait` to wait for the next message.
+"""
+"#;
 
 /// Check if a binary exists in PATH.
 pub fn is_installed(binary: &str) -> bool {
@@ -108,51 +125,27 @@ pub fn detect_platforms() -> Vec<&'static Platform> {
     PLATFORMS.iter().filter(|p| is_installed(p.binary)).collect()
 }
 
-/// Get the full path for a platform's install target.
-pub fn install_path(platform: &Platform) -> Result<PathBuf> {
+/// Get the full path for a platform's command file.
+pub fn command_path(platform: &Platform) -> Result<PathBuf> {
     let home = std::env::var("HOME").context("HOME not set")?;
-    let rel = match &platform.method {
-        InstallMethod::SlashCommand { command_path } => command_path,
-        InstallMethod::AppendConfig { config_path } => config_path,
-    };
-    Ok(PathBuf::from(home).join(rel))
+    Ok(PathBuf::from(home).join(platform.command_path))
 }
 
-/// Install the squad command/config for a given path and method.
-pub fn install_command(path: &Path) -> Result<()> {
+/// Install the squad command file for a platform.
+pub fn install_command(path: &Path, content: &str) -> Result<()> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)
             .with_context(|| format!("failed to create {}", parent.display()))?;
     }
-    std::fs::write(path, SQUAD_COMMAND_CONTENT)
+    std::fs::write(path, content)
         .with_context(|| format!("failed to write {}", path.display()))?;
-    Ok(())
-}
-
-/// Append squad section to a config .md file (idempotent).
-pub fn append_config(path: &Path) -> Result<()> {
-    if path.exists() {
-        let content = std::fs::read_to_string(path)?;
-        if content.contains(SQUAD_CONFIG_MARKER) {
-            return Ok(()); // already installed
-        }
-    }
-    use std::io::Write;
-    let mut file = std::fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(path)?;
-    write!(file, "{SQUAD_CONFIG_SECTION}")?;
     Ok(())
 }
 
 /// Install for a specific platform.
 pub fn install_for_platform(platform: &Platform) -> Result<PathBuf> {
-    let path = install_path(platform)?;
-    match &platform.method {
-        InstallMethod::SlashCommand { .. } => install_command(&path)?,
-        InstallMethod::AppendConfig { .. } => append_config(&path)?,
-    }
+    let path = command_path(platform)?;
+    install_command(&path, platform.content)?;
     Ok(path)
 }
 

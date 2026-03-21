@@ -66,7 +66,7 @@ Supported platforms:
 | Platform | Binary | Command location |
 |----------|--------|-----------------|
 | Claude Code | `claude` | `~/.claude/commands/squad.md` (slash command) |
-| Gemini CLI | `gemini` | `~/.gemini/GEMINI.md` (appends instructions) |
+| Gemini CLI | `gemini` | `~/.gemini/commands/squad.toml` (slash command) |
 | Codex CLI | `codex` | `~/.codex/prompts/squad.md` (slash command) |
 | OpenCode | `opencode` | `~/.config/opencode/commands/squad.md` (slash command) |
 

@@ -82,7 +82,7 @@ squad setup --list    # 查看支持的平台
 | 平台 | 二进制 | 命令位置 |
 |------|--------|---------|
 | Claude Code | `claude` | `~/.claude/commands/squad.md`（斜杠命令） |
-| Gemini CLI | `gemini` | `~/.gemini/GEMINI.md`（追加指令） |
+| Gemini CLI | `gemini` | `~/.gemini/commands/squad.toml`（斜杠命令） |
 | Codex CLI | `codex` | `~/.codex/prompts/squad.md`（斜杠命令） |
 | OpenCode | `opencode` | `~/.config/opencode/commands/squad.md`（斜杠命令） |
 
