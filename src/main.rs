@@ -341,9 +341,8 @@ fn cmd_setup(target: Option<&str>) -> Result<()> {
                 .iter()
                 .find(|p| p.name == name)
                 .with_context(|| format!("unknown platform: {name}. Run 'squad setup --list'"))?;
-            let path = squad::setup::command_path(platform)?;
-            squad::setup::install_command(&path)?;
-            println!("Installed /squad command → {}", path.display());
+            let path = squad::setup::install_for_platform(platform)?;
+            println!("Installed squad for {} → {}", name, path.display());
             Ok(())
         }
         None => {
@@ -351,7 +350,7 @@ fn cmd_setup(target: Option<&str>) -> Result<()> {
             let results = squad::setup::run_setup();
             if results.is_empty() {
                 println!("No supported AI tools found in PATH.");
-                println!("Supported: claude, gemini, codex");
+                println!("Supported: claude, gemini, codex, opencode");
                 return Ok(());
             }
             for (name, path, result) in &results {
@@ -361,7 +360,7 @@ fn cmd_setup(target: Option<&str>) -> Result<()> {
                 }
             }
             let ok_count = results.iter().filter(|(_, _, r)| r.is_ok()).count();
-            println!("Installed /squad command for {} tool(s).", ok_count);
+            println!("Installed squad for {} tool(s).", ok_count);
             Ok(())
         }
     }

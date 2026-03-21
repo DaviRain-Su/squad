@@ -1,29 +1,48 @@
 use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
 
+#[derive(Debug)]
+pub enum InstallMethod {
+    /// Write a slash command file to the given path
+    SlashCommand { command_path: &'static str },
+    /// Append instructions to a global config .md file
+    AppendConfig { config_path: &'static str },
+}
+
 pub struct Platform {
     pub name: &'static str,
     pub binary: &'static str,
-    pub command_path: &'static str, // relative to home dir
+    pub method: InstallMethod,
 }
 
 pub const PLATFORMS: &[Platform] = &[
     Platform {
         name: "claude",
         binary: "claude",
-        command_path: ".claude/commands/squad.md",
+        method: InstallMethod::SlashCommand {
+            command_path: ".claude/commands/squad.md",
+        },
     },
-    // Gemini CLI: custom slash commands not yet supported.
-    // ~/.gemini/antigravity/global_workflows/ is not a native command directory.
+    Platform {
+        name: "gemini",
+        binary: "gemini",
+        method: InstallMethod::AppendConfig {
+            config_path: ".gemini/GEMINI.md",
+        },
+    },
     Platform {
         name: "codex",
         binary: "codex",
-        command_path: ".codex/prompts/squad.md",
+        method: InstallMethod::SlashCommand {
+            command_path: ".codex/prompts/squad.md",
+        },
     },
     Platform {
         name: "opencode",
         binary: "opencode",
-        command_path: ".config/opencode/commands/squad.md",
+        method: InstallMethod::SlashCommand {
+            command_path: ".config/opencode/commands/squad.md",
+        },
     },
 ];
 
@@ -62,6 +81,19 @@ You are joining a squad multi-agent collaboration team.
 4. After completing any task, always run `squad receive <your-id> --wait` to wait for the next message.
 "#;
 
+const SQUAD_CONFIG_SECTION: &str = "\n## Squad Collaboration
+
+This project uses squad for multi-agent collaboration.
+When the user asks you to join squad as a role, run: `squad join <role> --role <role>`
+Then follow the role instructions from the output. Key commands:
+- `squad send <your-id> <to> \"<message>\"` — send a message
+- `squad receive <your-id> --wait` — wait for incoming messages
+- `squad agents` — see who is online
+- `squad help` — full command reference
+";
+
+const SQUAD_CONFIG_MARKER: &str = "## Squad Collaboration";
+
 /// Check if a binary exists in PATH.
 pub fn is_installed(binary: &str) -> bool {
     std::process::Command::new("which")
@@ -76,13 +108,17 @@ pub fn detect_platforms() -> Vec<&'static Platform> {
     PLATFORMS.iter().filter(|p| is_installed(p.binary)).collect()
 }
 
-/// Get the full path for a platform's command file.
-pub fn command_path(platform: &Platform) -> Result<PathBuf> {
+/// Get the full path for a platform's install target.
+pub fn install_path(platform: &Platform) -> Result<PathBuf> {
     let home = std::env::var("HOME").context("HOME not set")?;
-    Ok(PathBuf::from(home).join(platform.command_path))
+    let rel = match &platform.method {
+        InstallMethod::SlashCommand { command_path } => command_path,
+        InstallMethod::AppendConfig { config_path } => config_path,
+    };
+    Ok(PathBuf::from(home).join(rel))
 }
 
-/// Install the squad command file to the given path.
+/// Install the squad command/config for a given path and method.
 pub fn install_command(path: &Path) -> Result<()> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)
@@ -93,22 +129,43 @@ pub fn install_command(path: &Path) -> Result<()> {
     Ok(())
 }
 
-/// Run setup: detect platforms and install command files.
-/// Returns list of (platform_name, path, installed_or_error).
+/// Append squad section to a config .md file (idempotent).
+pub fn append_config(path: &Path) -> Result<()> {
+    if path.exists() {
+        let content = std::fs::read_to_string(path)?;
+        if content.contains(SQUAD_CONFIG_MARKER) {
+            return Ok(()); // already installed
+        }
+    }
+    use std::io::Write;
+    let mut file = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)?;
+    write!(file, "{SQUAD_CONFIG_SECTION}")?;
+    Ok(())
+}
+
+/// Install for a specific platform.
+pub fn install_for_platform(platform: &Platform) -> Result<PathBuf> {
+    let path = install_path(platform)?;
+    match &platform.method {
+        InstallMethod::SlashCommand { .. } => install_command(&path)?,
+        InstallMethod::AppendConfig { .. } => append_config(&path)?,
+    }
+    Ok(path)
+}
+
+/// Run setup: detect platforms and install.
 pub fn run_setup() -> Vec<(String, PathBuf, Result<()>)> {
     let mut results = Vec::new();
     for platform in PLATFORMS {
         if !is_installed(platform.binary) {
             continue;
         }
-        match command_path(platform) {
-            Ok(path) => {
-                let result = install_command(&path);
-                results.push((platform.name.to_string(), path, result));
-            }
-            Err(e) => {
-                results.push((platform.name.to_string(), PathBuf::new(), Err(e)));
-            }
+        match install_for_platform(platform) {
+            Ok(path) => results.push((platform.name.to_string(), path, Ok(()))),
+            Err(e) => results.push((platform.name.to_string(), PathBuf::new(), Err(e))),
         }
     }
     results

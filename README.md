@@ -65,9 +65,10 @@ Supported platforms:
 
 | Platform | Binary | Command location |
 |----------|--------|-----------------|
-| Claude Code | `claude` | `~/.claude/commands/squad.md` |
-| Codex CLI | `codex` | `~/.codex/prompts/squad.md` |
-| OpenCode | `opencode` | `~/.config/opencode/commands/squad.md` |
+| Claude Code | `claude` | `~/.claude/commands/squad.md` (slash command) |
+| Gemini CLI | `gemini` | `~/.gemini/GEMINI.md` (appends instructions) |
+| Codex CLI | `codex` | `~/.codex/prompts/squad.md` (slash command) |
+| OpenCode | `opencode` | `~/.config/opencode/commands/squad.md` (slash command) |
 
 Once installed, use `/squad <role>` in any project where `squad init` has been run.
 
