@@ -266,44 +266,98 @@ pub fn stop_daemon(workspace_root: impl AsRef<Path>) -> Result<()> {
 
 pub fn status_text(workspace_root: impl AsRef<Path>) -> Result<String> {
     let paths = DaemonPaths::new(workspace_root);
-    if !paths.socket_path().exists() {
-        return Ok("running: false\n".to_string());
-    }
 
-    let response = match send_request_blocking(paths.socket_path(), &Request::Status) {
-        Ok(response) => response,
-        Err(_) => return Ok("running: false\n".to_string()),
+    // Determine if daemon is running and collect registered agent health info
+    let (daemon_running, socket_display, registered_health) = if paths.socket_path().exists() {
+        match send_request_blocking(paths.socket_path(), &Request::Status) {
+            Ok(Response::Ok(payload)) => {
+                let socket = payload["socket_path"]
+                    .as_str()
+                    .map(str::to_string)
+                    .unwrap_or_else(|| paths.socket_path().display().to_string());
+                // Build a map of agent_id -> health string from the daemon response
+                let health_map: std::collections::HashMap<String, String> = payload["agents"]
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .filter_map(|a| {
+                        let id = a["agent_id"].as_str()?.to_string();
+                        let health = a["health"].as_str().unwrap_or("unknown").to_string();
+                        Some((id, health))
+                    })
+                    .collect();
+                (true, socket, health_map)
+            }
+            _ => (false, String::new(), std::collections::HashMap::new()),
+        }
+    } else {
+        (false, String::new(), std::collections::HashMap::new())
     };
 
-    let payload = match response {
-        Response::Ok(payload) => payload,
-        Response::Error { message } => bail!(message),
-    };
+    let mut lines = Vec::new();
 
-    let mut lines = vec![format!(
-        "running: {}",
-        payload["running"].as_bool().unwrap_or(false)
-    )];
-
-    if let Some(socket_path) = payload["socket_path"].as_str() {
-        lines.push(format!("socket: {socket_path}"));
+    // Daemon line
+    if daemon_running {
+        lines.push("daemon: running".to_string());
+        if !socket_display.is_empty() {
+            lines.push(format!("socket: {socket_display}"));
+        }
+    } else {
+        lines.push("daemon: stopped".to_string());
     }
 
-    if let Some(agents) = payload["agents"].as_array() {
-        if agents.is_empty() {
-            lines.push("agents: none".to_string());
-        } else {
-            for agent in agents {
-                let agent_id = agent["agent_id"].as_str().unwrap_or("unknown");
-                let role = agent["role"].as_str().unwrap_or("unknown");
-                let status = agent["status"].as_str().unwrap_or("unknown");
-                let health = agent["health"].as_str().unwrap_or("unknown");
-                let last_seen = agent["last_seen_unix"].as_u64().unwrap_or(0);
-                let rendered = format!("{agent_id} ({role}) [{status}] health={health} last_seen={last_seen}");
-                if health.eq_ignore_ascii_case("offline") {
-                    lines.push(format!("\x1b[31m{rendered}\x1b[0m"));
-                } else {
-                    lines.push(rendered);
+    // Workflow state (from state.json if it exists)
+    if paths.state_path().exists() {
+        if let Ok(state) = WorkflowState::load_from_path(&paths.state_path()) {
+            let step = state.current_step.as_deref().unwrap_or("none");
+            let goal = if state.goal.is_empty() { "-".to_string() } else { format!("{:?}", state.goal) };
+            lines.push(format!(
+                "workflow: step={step} iteration={} goal={goal}",
+                state.iteration
+            ));
+        }
+    }
+
+    // Agents: merge configured agents (from squad.yaml) with registered health
+    if paths.config_path().exists() {
+        if let Ok(config) = SquadConfig::from_path(&paths.config_path()) {
+            // Collect all agent names from config: explicit agents map + workflow steps
+            let mut agent_names: Vec<String> = Vec::new();
+            for step in &config.workflow.steps {
+                if !agent_names.contains(&step.agent) {
+                    agent_names.push(step.agent.clone());
+                }
+            }
+            for name in config.agents.keys() {
+                if !agent_names.contains(name) {
+                    agent_names.push(name.clone());
+                }
+            }
+            agent_names.sort();
+
+            if agent_names.is_empty() {
+                lines.push("agents: none".to_string());
+            } else {
+                lines.push("agents:".to_string());
+                for name in &agent_names {
+                    let adapter = config
+                        .agents
+                        .get(name)
+                        .map(|a| match a.adapter {
+                            crate::config::AgentAdapterKind::Mcp => "mcp",
+                            crate::config::AgentAdapterKind::Hook => "hook",
+                            crate::config::AgentAdapterKind::Watch => "watch",
+                        })
+                        .unwrap_or("mcp");
+                    let health = registered_health.get(name).map(String::as_str).unwrap_or(
+                        if daemon_running { "not registered" } else { "offline" },
+                    );
+                    let rendered = format!("  {name} ({adapter}): {health}");
+                    if health.eq_ignore_ascii_case("offline") || health == "not registered" {
+                        lines.push(format!("\x1b[31m{rendered}\x1b[0m"));
+                    } else {
+                        lines.push(rendered);
+                    }
                 }
             }
         }

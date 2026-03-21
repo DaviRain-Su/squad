@@ -313,8 +313,8 @@ fn status_reflects_daemon_running_state() {
     let before = run_cli(workspace.path(), &["status"]);
     assert!(before.status.success());
     assert!(
-        String::from_utf8_lossy(&before.stdout).contains("running: false"),
-        "expected 'running: false' before start"
+        String::from_utf8_lossy(&before.stdout).contains("daemon: stopped"),
+        "expected 'daemon: stopped' before start"
     );
 
     let start = run_cli(workspace.path(), &["start"]);
@@ -327,8 +327,8 @@ fn status_reflects_daemon_running_state() {
     let during = run_cli(workspace.path(), &["status"]);
     assert!(during.status.success());
     assert!(
-        String::from_utf8_lossy(&during.stdout).contains("running: true"),
-        "expected 'running: true' while daemon is up"
+        String::from_utf8_lossy(&during.stdout).contains("daemon: running"),
+        "expected 'daemon: running' while daemon is up"
     );
 
     let stop = run_cli(workspace.path(), &["stop"]);
@@ -339,7 +339,7 @@ fn status_reflects_daemon_running_state() {
     let after = run_cli(workspace.path(), &["status"]);
     assert!(after.status.success());
     assert!(
-        String::from_utf8_lossy(&after.stdout).contains("running: false"),
-        "expected 'running: false' after stop"
+        String::from_utf8_lossy(&after.stdout).contains("daemon: stopped"),
+        "expected 'daemon: stopped' after stop"
     );
 }

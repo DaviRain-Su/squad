@@ -122,8 +122,8 @@ fn daemon_lifecycle_handles_socket_requests() {
         String::from_utf8_lossy(&status_output.stderr)
     );
     let status_text = String::from_utf8_lossy(&status_output.stdout);
-    assert!(status_text.contains("running: true"));
-    assert!(status_text.contains("cc (implementer)"));
+    assert!(status_text.contains("daemon: running"));
+    assert!(status_text.contains("builder (mcp)"));
 
     let stop_output = run_cli(workspace.path(), &["stop"]);
     assert!(
