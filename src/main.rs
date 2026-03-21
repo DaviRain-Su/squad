@@ -121,9 +121,12 @@ fn open_store(workspace: &Path) -> Result<squad::store::Store> {
     squad::store::Store::open(&db_path)
 }
 
-fn print_messages(messages: &[squad::store::MessageRecord]) {
+fn print_messages(messages: &[squad::store::MessageRecord], receiver: Option<&str>) {
     for msg in messages {
         println!("[from {}] {}", msg.from_agent, msg.content);
+        if let Some(id) = receiver {
+            println!("  → Reply: squad send {id} {} \"<your response>\"", msg.from_agent);
+        }
     }
 }
 
@@ -207,7 +210,7 @@ fn cmd_receive(agent: &str, wait: bool, timeout_secs: u64) -> Result<()> {
             if store.has_unread_messages(agent)? {
                 let messages = store.receive_messages(agent)?;
                 if !messages.is_empty() {
-                    print_messages(&messages);
+                    print_messages(&messages, Some(agent));
                     return Ok(());
                 }
             }
@@ -223,7 +226,7 @@ fn cmd_receive(agent: &str, wait: bool, timeout_secs: u64) -> Result<()> {
         if messages.is_empty() {
             println!("No new messages.");
         } else {
-            print_messages(&messages);
+            print_messages(&messages, Some(agent));
         }
         Ok(())
     }
