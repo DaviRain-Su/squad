@@ -23,6 +23,11 @@ pub const PLATFORMS: &[Platform] = &[
         binary: "codex",
         command_path: ".codex/prompts/squad.md",
     },
+    Platform {
+        name: "opencode",
+        binary: "opencode",
+        command_path: ".config/opencode/commands/squad.md",
+    },
 ];
 
 pub const SQUAD_COMMAND_CONTENT: &str = r#"---

@@ -84,6 +84,7 @@ squad setup --list    # 查看支持的平台
 | Claude Code | `claude` | `~/.claude/commands/squad.md` |
 | Gemini CLI | `gemini` | `~/.gemini/antigravity/global_workflows/squad.md` |
 | Codex CLI | `codex` | `~/.codex/prompts/squad.md` |
+| OpenCode | `opencode` | `~/.config/opencode/commands/squad.md` |
 
 安装后，在任何执行过 `squad init` 的项目中使用 `/squad <角色>` 即可。
 

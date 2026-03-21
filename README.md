@@ -68,6 +68,7 @@ Supported platforms:
 | Claude Code | `claude` | `~/.claude/commands/squad.md` |
 | Gemini CLI | `gemini` | `~/.gemini/antigravity/global_workflows/squad.md` |
 | Codex CLI | `codex` | `~/.codex/prompts/squad.md` |
+| OpenCode | `opencode` | `~/.config/opencode/commands/squad.md` |
 
 Once installed, use `/squad <role>` in any project where `squad init` has been run.
 
