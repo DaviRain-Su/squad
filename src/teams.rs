@@ -73,7 +73,7 @@ pub fn list_teams(workspace: &Path) -> Vec<String> {
     if let Ok(entries) = std::fs::read_dir(&custom_dir) {
         for entry in entries.flatten() {
             let path = entry.path();
-            if path.extension().map_or(false, |e| e == "yaml" || e == "yml") {
+            if path.extension().is_some_and(|e| e == "yaml" || e == "yml") {
                 if let Some(name) = path.file_stem() {
                     let name = name.to_string_lossy().to_string();
                     if !teams.contains(&name) {

@@ -139,11 +139,8 @@ fn cmd_join(id: &str, role: &str) -> Result<()> {
     println!("Joined as {id} (role: {role}).");
 
     // Output role prompt if available
-    match squad::roles::load_role(&workspace, role) {
-        Ok(prompt) => {
-            println!("\n=== Role Instructions ===\n{prompt}");
-        }
-        Err(_) => {} // Custom role not found, that's fine
+    if let Ok(prompt) = squad::roles::load_role(&workspace, role) {
+        println!("\n=== Role Instructions ===\n{prompt}");
     }
     Ok(())
 }
@@ -195,10 +192,12 @@ fn cmd_receive(agent: &str, wait: bool, timeout_secs: u64) -> Result<()> {
             std::time::Instant::now() + std::time::Duration::from_secs(timeout_secs);
         loop {
             let store = open_store(&workspace)?;
-            let messages = store.receive_messages(agent)?;
-            if !messages.is_empty() {
-                print_messages(&messages);
-                return Ok(());
+            if store.has_unread_messages(agent)? {
+                let messages = store.receive_messages(agent)?;
+                if !messages.is_empty() {
+                    print_messages(&messages);
+                    return Ok(());
+                }
             }
             if std::time::Instant::now() > deadline {
                 println!("No new messages (timed out after {timeout_secs}s).");
@@ -250,9 +249,9 @@ fn cmd_history(agent_id: Option<&str>) -> Result<()> {
         println!("No message history.");
     } else {
         for msg in &messages {
-            let status = if msg.read { " " } else { "*" };
+            let marker = if msg.read { "  " } else { "* " };
             println!(
-                " {status} {} -> {}: {}",
+                "{marker}{} -> {}: {}",
                 msg.from_agent, msg.to_agent, msg.content
             );
         }
