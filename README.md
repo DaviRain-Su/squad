@@ -1,3 +1,5 @@
+[中文](README.zh-CN.md)
+
 # squad
 
 **Multi-AI-agent terminal collaboration — let Claude Code, Codex, Gemini, and others work together automatically.**
