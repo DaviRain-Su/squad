@@ -39,10 +39,42 @@ pub fn init_workspace(workspace: &Path) -> Result<()> {
     }
 
     // Add .squad/ to .gitignore
-    let gitignore_path = workspace.join(".gitignore");
-    let entry = ".squad/";
-    let needs_add = if gitignore_path.exists() {
-        let content = std::fs::read_to_string(&gitignore_path)?;
+    append_if_missing(workspace, ".gitignore", ".squad/")?;
+
+    // Add squad instructions to agent config files
+    let squad_section = SQUAD_AGENT_INSTRUCTIONS;
+    let marker = "## Squad Collaboration";
+    for filename in &["CLAUDE.md", "AGENTS.md", "GEMINI.md"] {
+        append_section_if_missing(workspace, filename, marker, squad_section)?;
+    }
+
+    Ok(())
+}
+
+const SQUAD_AGENT_INSTRUCTIONS: &str = r#"## Squad Collaboration
+
+This project uses squad for multi-agent collaboration.
+
+### Commands
+- `squad join <id> [--role <role>]` — join the team (role defaults to id)
+- `squad agents` — see who is online
+- `squad send <your-id> <to> "<message>"` — send a message (use `@all` to broadcast)
+- `squad receive <your-id> --wait` — block until a message arrives
+- `squad receive <your-id>` — check inbox immediately
+- `squad history` — view all messages
+
+### How to participate
+When the user tells you a role (e.g. "你是 manager" or "you are worker"), run:
+1. `squad join <role> --role <role>` — register and read your role instructions
+2. Do your work as instructed by the role
+3. `squad send <your-id> <recipient> "<result>"` — report results
+4. `squad receive <your-id> --wait` — wait for the next task or feedback
+"#;
+
+fn append_if_missing(workspace: &Path, filename: &str, entry: &str) -> Result<()> {
+    let path = workspace.join(filename);
+    let needs_add = if path.exists() {
+        let content = std::fs::read_to_string(&path)?;
         !content.lines().any(|line| line.trim() == entry)
     } else {
         true
@@ -52,9 +84,30 @@ pub fn init_workspace(workspace: &Path) -> Result<()> {
         let mut file = std::fs::OpenOptions::new()
             .create(true)
             .append(true)
-            .open(&gitignore_path)?;
+            .open(&path)?;
         writeln!(file, "{entry}")?;
     }
+    Ok(())
+}
 
+fn append_section_if_missing(
+    workspace: &Path,
+    filename: &str,
+    marker: &str,
+    content: &str,
+) -> Result<()> {
+    let path = workspace.join(filename);
+    if path.exists() {
+        let existing = std::fs::read_to_string(&path)?;
+        if existing.contains(marker) {
+            return Ok(());
+        }
+    }
+    use std::io::Write;
+    let mut file = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&path)?;
+    writeln!(file, "\n{content}")?;
     Ok(())
 }
