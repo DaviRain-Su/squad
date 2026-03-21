@@ -311,21 +311,43 @@ fn cmd_clean() -> Result<()> {
 }
 
 fn print_usage() {
-    println!("squad v{} — Multi-AI-agent terminal collaboration", env!("CARGO_PKG_VERSION"));
-    println!();
-    println!("Usage: squad <command> [args]");
-    println!();
-    println!("Commands:");
-    println!("  init                                Initialize workspace");
-    println!("  join <id> [--role <role>]            Join as agent (role defaults to id)");
-    println!("  leave <id>                           Remove agent");
-    println!("  agents                               List online agents");
-    println!("  send <from> <to> <message>           Send message (use @all to broadcast)");
-    println!("  receive <id> [--wait] [--timeout N]  Check inbox (--wait blocks until message)");
-    println!("  pending                              Show all unread messages");
-    println!("  history [agent]                      Show all messages (including read)");
-    println!("  roles                                List available roles");
-    println!("  teams                                List available teams");
-    println!("  team <name>                          Show team template");
-    println!("  clean                                Clear all state");
+    print!("{HELP_TEXT}");
 }
+
+const HELP_TEXT: &str = r#"squad — Multi-AI-agent terminal collaboration
+
+COMMANDS
+  squad init                                Initialize workspace
+  squad join <id> [--role <role>]            Join as agent (role defaults to id)
+  squad leave <id>                           Remove agent
+  squad agents                               List online agents
+  squad send <from> <to> <message>           Send message (use @all to broadcast)
+  squad receive <id> [--wait] [--timeout N]  Check inbox (--wait blocks until message)
+  squad pending                              Show all unread messages
+  squad history [agent]                      Show all messages (including read)
+  squad roles                                List available roles
+  squad teams                                List available teams
+  squad team <name>                          Show team template
+  squad clean                                Clear all state
+
+QUICK START
+  1. squad init                              Set up workspace
+  2. squad join manager --role manager        Join as manager in terminal 1
+  3. squad join worker --role worker          Join as worker in terminal 2
+  4. squad send manager worker "task..."      Manager assigns task
+  5. squad receive worker --wait              Worker waits for task
+  6. squad send worker manager "done..."      Worker reports back
+
+HOW TO PARTICIPATE
+  When told a role (e.g. "you are manager"), run:
+  1. squad join <role> --role <role>          Register and read role instructions
+  2. Do your work as instructed by the role
+  3. squad send <your-id> <to> "result"       Report results
+  4. squad receive <your-id> --wait           Wait for next task or feedback
+
+EXAMPLES
+  squad send manager worker "implement auth module with JWT"
+  squad send manager @all "API contract updated, rebase your work"
+  squad receive worker --wait --timeout 60
+  squad history worker
+"#;

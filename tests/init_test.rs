@@ -48,8 +48,7 @@ fn test_init_creates_agent_config_files() {
         assert!(path.exists(), "{filename} should exist");
         let content = std::fs::read_to_string(&path).unwrap();
         assert!(content.contains("Squad Collaboration"), "{filename} should contain squad section");
-        assert!(content.contains("squad join"), "{filename} should contain join command");
-        assert!(content.contains("squad receive"), "{filename} should contain receive command");
+        assert!(content.contains("squad help"), "{filename} should point to squad help");
     }
 }
 

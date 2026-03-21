@@ -51,25 +51,10 @@ pub fn init_workspace(workspace: &Path) -> Result<()> {
     Ok(())
 }
 
-const SQUAD_AGENT_INSTRUCTIONS: &str = r#"## Squad Collaboration
+const SQUAD_AGENT_INSTRUCTIONS: &str = "\
+## Squad Collaboration
 
-This project uses squad for multi-agent collaboration.
-
-### Commands
-- `squad join <id> [--role <role>]` — join the team (role defaults to id)
-- `squad agents` — see who is online
-- `squad send <your-id> <to> "<message>"` — send a message (use `@all` to broadcast)
-- `squad receive <your-id> --wait` — block until a message arrives
-- `squad receive <your-id>` — check inbox immediately
-- `squad history` — view all messages
-
-### How to participate
-When the user tells you a role (e.g. "你是 manager" or "you are worker"), run:
-1. `squad join <role> --role <role>` — register and read your role instructions
-2. Do your work as instructed by the role
-3. `squad send <your-id> <recipient> "<result>"` — report results
-4. `squad receive <your-id> --wait` — wait for the next task or feedback
-"#;
+This project uses squad for multi-agent collaboration. Run `squad help` for all commands and usage guide.\n";
 
 fn append_if_missing(workspace: &Path, filename: &str, entry: &str) -> Result<()> {
     let path = workspace.join(filename);
