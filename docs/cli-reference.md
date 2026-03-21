@@ -5,7 +5,7 @@
 Main CLI for managing the squad daemon and workspace.
 
 ```
-Usage: squad <command> [options]
+Usage: squad <init|setup|start|run|stop|status|doctor|log|history|clean|watch> [options]
 ```
 
 All commands are run from your workspace directory (where `squad.yaml` lives).
@@ -14,28 +14,59 @@ All commands are run from your workspace directory (where `squad.yaml` lives).
 
 ### `squad init`
 
-Create a `squad.yaml` template and example hook scripts in the current directory.
+Create a `squad.yaml` template in the current directory.
 
 ```bash
 squad init
 ```
 
-Creates:
-- `squad.yaml` — default configuration template
-- `.squad/hooks/on_complete.sh` — example completion hook
-- `.squad/hooks/codex.sh` — example Codex hook
+Creates `squad.yaml` with a ready-to-use two-agent (builder + reviewer) loop template.
 
-If `squad.yaml` already exists it will be overwritten with the template.
+> **Safe by default:** if `squad.yaml` already exists, `squad init` prints a notice and
+> exits without overwriting. Use `--force` to replace it.
 
-**Flag:**
+**Flags:**
 
-`--fresh` — Clear all runtime history before writing the config:
+| Flag | Description |
+|------|-------------|
+| `--force` | Overwrite an existing `squad.yaml` and clear runtime history |
+| `--fresh` | Alias for `--force` |
 
 ```bash
-squad init --fresh
+squad init --force   # overwrite and reset
 ```
 
-Equivalent to running `squad clean` then `squad init`.
+---
+
+### `squad setup <agent>`
+
+Register the squad MCP server for an AI agent in the current workspace.
+
+```bash
+squad setup cc                        # Claude Code
+squad setup cc --update-claude-md    # also append Squad protocol to CLAUDE.md
+squad setup codex
+squad setup gemini
+squad setup qwen
+squad setup --list                    # list supported agents
+```
+
+Creates or updates `.mcp.json` with:
+
+```json
+{
+  "mcpServers": {
+    "squad": {
+      "command": "squad-mcp",
+      "args": [],
+      "env": { "SQUAD_AGENT_ID": "<agent>" }
+    }
+  }
+}
+```
+
+**`--update-claude-md`** appends a "Squad Collaboration Protocol" section to `CLAUDE.md`,
+documenting `check_inbox`, `send_heartbeat`, `send_message`, and `mark_done` usage.
 
 ---
 
@@ -51,9 +82,57 @@ squad start
 - Validates agent configuration.
 - Creates example artifacts for watch-adapter agents if needed.
 - Spawns the daemon process and waits up to 5 seconds for it to create its socket.
-- If the daemon is already running, exits silently.
+- If the daemon is already running, prints a notice and exits.
+- If a stale socket from a previous crash is found, removes it and starts fresh.
 
 **Requires:** `squad.yaml` to exist.
+
+---
+
+### `squad run <goal>`
+
+Start the workflow by sending a goal to the running daemon.
+
+```bash
+squad run "refactor the auth module to use JWT"
+squad run "add unit tests for the billing service"
+```
+
+- Resets workflow state and stores the goal string.
+- Dispatches the first workflow step's message to the configured agent, with
+  `{goal}` substituted by the value you provide.
+- Subsequent `mark_done` calls from agents advance the workflow automatically.
+
+**Requires:** daemon to be running (`squad start` first).
+
+```bash
+# Typical sequence
+squad start
+squad run "implement the feature described in SPEC.md"
+squad watch
+```
+
+The goal string is available as `{goal}` in all step `message` templates.
+
+---
+
+### `squad doctor`
+
+Run a health check and print a colour-coded status report.
+
+```bash
+squad doctor
+```
+
+Checks:
+
+| Check | Green ✓ | Yellow ⚠ | Red ✗ |
+|-------|---------|-----------|-------|
+| Daemon | socket exists and responds | socket exists but no response | socket not found |
+| `squad-mcp` | found in PATH | — | not found in PATH |
+| `.mcp.json` | squad entry present and valid | file missing or squad entry absent | file is invalid JSON |
+
+Run this whenever agents can't connect to the daemon or MCP tools fail.
 
 ---
 

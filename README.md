@@ -4,35 +4,40 @@
 
 squad runs a local daemon that routes messages between AI CLI agents over MCP, hook scripts, or watched files, coordinating them through loop, pipeline, or parallel workflows.
 
+> **Platform:** squad requires **macOS or Linux**. Windows is not currently supported.
+
 ---
 
 ## Quick Start
 
 ```bash
-# 1. Install from source (requires Rust / cargo)
+# 1. Install (requires Rust — https://rustup.rs)
 git clone https://github.com/mco-org/squad.git
 cd squad
 ./install.sh          # builds & installs squad, squad-mcp, squad-hook
 
-# Or install directly with cargo:
+# Or with cargo:
 cargo install --git https://github.com/mco-org/squad
 
-# 2. Initialize a workspace
+# 2. Initialize your project workspace
 cd my-project
-squad init
+squad init            # creates squad.yaml with a builder + reviewer template
 
-# 3. Register the squad MCP server (Claude Code)
+# 3. Register squad with your AI agent (Claude Code shown)
 squad setup cc --update-claude-md
 
-# 4. Edit squad.yaml to describe your agents and workflow
-$EDITOR squad.yaml
-
-# 5. Start the daemon
+# 4. Start the daemon
 squad start
 
-# 6. Watch it run
+# 5. Kick off the workflow with a goal
+squad run "refactor the auth module"
+
+# 6. Watch live progress
 squad watch
 ```
+
+> **Tip:** Run `squad doctor` any time to check that the daemon is running,
+> `squad-mcp` is in PATH, and `.mcp.json` is configured correctly.
 
 ---
 
@@ -136,11 +141,15 @@ Step `message` (alias: `prompt`) fields support these variables:
 
 | Command | Description |
 |---------|-------------|
-| `squad init` | Create `squad.yaml` template and example hook scripts |
-| `squad init --fresh` | Same as `init` but also clears history first |
+| `squad init` | Create `squad.yaml` template (skips if file exists) |
+| `squad init --force` | Overwrite existing `squad.yaml` and clear history |
+| `squad setup <agent>` | Register squad MCP server for an agent (`cc`, `codex`, `gemini`, `qwen`) |
+| `squad setup --list` | List supported agents |
 | `squad start` | Start the daemon in the background |
+| `squad run <goal>` | Start the workflow with a goal string |
 | `squad stop` | Gracefully stop the daemon |
 | `squad status` | Show daemon status and agent health |
+| `squad doctor` | Diagnose daemon, `squad-mcp`, and `.mcp.json` |
 | `squad log` | Print the audit log |
 | `squad log --tail N` | Show last N audit entries |
 | `squad log --filter key=val` | Filter log by field |

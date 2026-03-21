@@ -7,20 +7,23 @@ This guide walks you through setting up a two-agent collaboration loop using Cla
 - Rust toolchain (`cargo`)
 - Claude Code (`claude`) installed
 - A terminal
+- **macOS or Linux** — squad uses Unix sockets and is not supported on Windows
 
 ## Step 1 — Build and Install
 
 ```bash
-git clone https://github.com/your-org/squad
+git clone https://github.com/mco-org/squad.git
 cd squad
-cargo install --path .
+./install.sh
 ```
 
-This installs three binaries:
+`install.sh` builds and installs three binaries:
 
 - `squad` — main CLI
 - `squad-mcp` — MCP server for AI agents
 - `squad-hook` — helper for hook-based agents
+
+> **Alternative:** `cargo install --git https://github.com/mco-org/squad`
 
 ## Step 2 — Initialize a Workspace
 
@@ -119,6 +122,8 @@ Add `squad-mcp` to Claude Code's MCP servers. Edit `~/.claude/settings.json`:
 
 The `SQUAD_AGENT_ID` tells the MCP server which agent identity to use when checking the inbox and sending heartbeats.
 
+> **MCP vs hook agents:** Claude Code connects to the daemon via `squad-mcp` (MCP protocol) and calls `check_inbox`, `mark_done`, etc. as tools. Agents that do not support MCP (Codex, Gemini, Qwen) use the **hook adapter** — the daemon invokes a shell script with `$SQUAD_MESSAGE` set to the message content. Run `squad setup codex` to generate a starter hook script at `.squad/hooks/codex.sh`.
+
 ## Step 5 — Set Up the Codex Hook
 
 Edit `.squad/hooks/codex.sh`:
@@ -154,7 +159,17 @@ socket: /path/to/my-project/.squad/squad.sock
 builder (implement) [idle] health=online last_seen=0
 ```
 
-## Step 7 — Watch the Workflow
+## Step 7 — Start the Workflow
+
+Send a goal to the daemon to kick off the workflow:
+
+```bash
+squad run "refactor the auth module to use JWT"
+```
+
+The daemon dispatches the goal to the first configured agent (`cc` in the example above). The workflow then advances automatically as each agent calls `mark_done`.
+
+## Step 8 — Watch the Workflow
 
 Open the live TUI:
 
