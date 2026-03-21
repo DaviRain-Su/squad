@@ -12,9 +12,21 @@ squad 让多个 AI CLI 工具（Claude Code、Gemini、Codex 等）通过 Shell 
 # 安装
 cargo install --path .
 
-# 初始化工作区
+# 安装 /squad 斜杠命令到已有的 AI 工具
+squad setup
+
+# 初始化项目工作区
 squad init
 
+# 在任意 AI CLI 终端中使用斜杠命令
+/squad manager      # 终端 1
+/squad worker       # 终端 2
+/squad inspector    # 终端 3
+```
+
+或手动操作：
+
+```bash
 # 终端 1 — 启动管理者
 squad join manager --role manager
 
@@ -55,7 +67,25 @@ squad send inspector manager "PASS: 认证模块没有问题"
 | `squad roles` | 列出可用角色 |
 | `squad teams` | 列出可用团队 |
 | `squad team <name>` | 查看团队模板 |
+| `squad setup [platform]` | 安装 `/squad` 斜杠命令到 AI 工具 |
+| `squad setup --list` | 列出支持的平台和状态 |
 | `squad clean` | 清除所有状态 |
+
+## 安装斜杠命令
+
+```bash
+squad setup           # 自动检测已安装的工具并安装
+squad setup claude    # 只安装到 Claude Code
+squad setup --list    # 查看支持的平台
+```
+
+| 平台 | 二进制 | 命令位置 |
+|------|--------|---------|
+| Claude Code | `claude` | `~/.claude/commands/squad.md` |
+| Gemini CLI | `gemini` | `~/.gemini/antigravity/global_workflows/squad.md` |
+| Codex CLI | `codex` | `~/.codex/prompts/squad.md` |
+
+安装后，在任何执行过 `squad init` 的项目中使用 `/squad <角色>` 即可。
 
 ## 工作原理
 
