@@ -25,10 +25,15 @@ info "Found $CARGO_VERSION"
 
 # 2. Build & install
 echo ""
-echo "Installing squad, squad-mcp, and squad-hook …"
+echo "Installing squad …"
 cargo install --path "$(dirname "$0")" --locked
 
-# 3. PATH check
+# 3. Install slash commands for detected AI tools
+echo ""
+echo "Installing /squad slash command for detected AI tools…"
+squad setup || warning "squad setup failed (non-fatal)"
+
+# 4. PATH check (renumbered)
 CARGO_BIN="$HOME/.cargo/bin"
 case ":${PATH}:" in
     *":${CARGO_BIN}:"*)
@@ -45,7 +50,7 @@ case ":${PATH}:" in
         ;;
 esac
 
-# 4. Success message
+# 5. Success message
 echo ""
 info "Installation complete!"
 echo ""
@@ -54,16 +59,10 @@ echo ""
 echo "  1. Go to your project directory:"
 echo "       cd my-project"
 echo ""
-echo "  2. Initialise a squad workspace:"
+echo "  2. Initialize a squad workspace:"
 echo "       squad init"
 echo ""
-echo "  3. Register the squad MCP server for Claude Code:"
-echo "       squad setup cc --update-claude-md"
-echo ""
-echo "  4. Edit squad.yaml to describe your agents and workflow, then:"
-echo "       squad start"
-echo ""
-echo "  5. Watch the live dashboard:"
-echo "       squad watch"
+echo "  3. In any AI CLI terminal, use the slash command:"
+echo "       /squad manager"
 echo ""
 echo "  Run 'squad help' for all commands."

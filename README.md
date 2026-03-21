@@ -12,32 +12,24 @@ squad lets multiple AI CLI agents (Claude Code, Gemini, Codex, etc.) communicate
 # Install
 cargo install --path .
 
-# Initialize workspace
+# Install /squad slash command for your AI tools
+squad setup
+
+# Initialize workspace in your project
 squad init
 
-# In terminal 1 — start the manager
+# In any AI CLI terminal — just use the slash command
+/squad manager      # terminal 1
+/squad worker       # terminal 2
+/squad inspector    # terminal 3
+```
+
+Or manually:
+
+```bash
 squad join manager --role manager
-
-# In terminal 2 — start a worker
-squad join worker --role worker
-
-# In terminal 3 — start an inspector
-squad join inspector --role inspector
-
-# Manager assigns a task
 squad send manager worker "implement auth module with JWT"
-
-# Worker checks inbox (blocks until message arrives)
 squad receive worker --wait
-
-# Worker completes and reports back
-squad send worker manager "done: added JWT auth in src/auth.rs"
-
-# Manager forwards to inspector
-squad send manager inspector "review auth implementation"
-
-# Inspector reviews and reports
-squad send inspector manager "PASS: auth module looks good"
 ```
 
 ## Commands
@@ -55,7 +47,29 @@ squad send inspector manager "PASS: auth module looks good"
 | `squad roles` | List available roles |
 | `squad teams` | List available teams |
 | `squad team <name>` | Show team template |
+| `squad setup [platform]` | Install `/squad` slash command for AI tools |
+| `squad setup --list` | List supported platforms and status |
 | `squad clean` | Clear all state |
+
+## Setup
+
+Install the `/squad` slash command for your AI tools:
+
+```bash
+squad setup           # auto-detect and install for all found tools
+squad setup claude    # install only for Claude Code
+squad setup --list    # show supported platforms
+```
+
+Supported platforms:
+
+| Platform | Binary | Command location |
+|----------|--------|-----------------|
+| Claude Code | `claude` | `~/.claude/commands/squad.md` |
+| Gemini CLI | `gemini` | `~/.gemini/antigravity/global_workflows/squad.md` |
+| Codex CLI | `codex` | `~/.codex/prompts/squad.md` |
+
+Once installed, use `/squad <role>` in any project where `squad init` has been run.
 
 ## How It Works
 

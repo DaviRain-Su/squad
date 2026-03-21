@@ -1,4 +1,4 @@
-use anyhow::{bail, Result};
+use anyhow::{bail, Context, Result};
 use std::path::{Path, PathBuf};
 
 fn main() -> Result<()> {
@@ -85,6 +85,10 @@ fn main() -> Result<()> {
             }
             cmd_team(&name)
         }
+        "setup" => {
+            let target = args.next();
+            cmd_setup(target.as_deref())
+        }
         "clean" => cmd_clean(),
         "help" | "--help" | "-h" => {
             print_usage();
@@ -138,9 +142,17 @@ fn cmd_join(id: &str, role: &str) -> Result<()> {
     store.register_agent(id, role)?;
     println!("Joined as {id} (role: {role}).");
 
-    // Output role prompt if available
-    if let Ok(prompt) = squad::roles::load_role(&workspace, role) {
-        println!("\n=== Role Instructions ===\n{prompt}");
+    match squad::roles::load_role(&workspace, role) {
+        Ok(prompt) => {
+            println!("\n=== Role Instructions ===\n{prompt}");
+        }
+        Err(_) => {
+            println!("\nNo predefined template for \"{role}\". Interpret this role autonomously.");
+            println!("Communicate using: squad send, squad receive --wait, squad agents");
+            println!("Tip: create .squad/roles/{role}.md to customize behavior.");
+            let roles = squad::roles::list_roles(&workspace);
+            println!("Predefined roles: {}", roles.join(", "));
+        }
     }
     Ok(())
 }
@@ -310,6 +322,51 @@ fn cmd_clean() -> Result<()> {
     Ok(())
 }
 
+fn cmd_setup(target: Option<&str>) -> Result<()> {
+    match target {
+        Some("--list") => {
+            println!("Supported platforms:");
+            for p in squad::setup::PLATFORMS {
+                let status = if squad::setup::is_installed(p.binary) {
+                    "installed"
+                } else {
+                    "not found"
+                };
+                println!("  {} ({}: {})", p.name, p.binary, status);
+            }
+            Ok(())
+        }
+        Some(name) => {
+            let platform = squad::setup::PLATFORMS
+                .iter()
+                .find(|p| p.name == name)
+                .with_context(|| format!("unknown platform: {name}. Run 'squad setup --list'"))?;
+            let path = squad::setup::command_path(platform)?;
+            squad::setup::install_command(&path)?;
+            println!("Installed /squad command → {}", path.display());
+            Ok(())
+        }
+        None => {
+            println!("Detecting installed AI tools...");
+            let results = squad::setup::run_setup();
+            if results.is_empty() {
+                println!("No supported AI tools found in PATH.");
+                println!("Supported: claude, gemini, codex");
+                return Ok(());
+            }
+            for (name, path, result) in &results {
+                match result {
+                    Ok(()) => println!("  {} → {}", name, path.display()),
+                    Err(e) => println!("  {} — {}", name, e),
+                }
+            }
+            let ok_count = results.iter().filter(|(_, _, r)| r.is_ok()).count();
+            println!("Installed /squad command for {} tool(s).", ok_count);
+            Ok(())
+        }
+    }
+}
+
 fn print_usage() {
     print!("{HELP_TEXT}");
 }
@@ -328,6 +385,8 @@ COMMANDS
   squad roles                                List available roles
   squad teams                                List available teams
   squad team <name>                          Show team template
+  squad setup [platform]                      Install /squad slash command for AI tools
+  squad setup --list                         List supported platforms
   squad clean                                Clear all state
 
 QUICK START

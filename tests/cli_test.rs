@@ -122,6 +122,31 @@ fn test_leave() {
 }
 
 #[test]
+fn test_setup_list() {
+    let tmp = TempDir::new().unwrap();
+    squad(tmp.path())
+        .args(["setup", "--list"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("claude"))
+        .stdout(predicate::str::contains("gemini"))
+        .stdout(predicate::str::contains("codex"));
+}
+
+#[test]
+fn test_join_freeform_role_succeeds() {
+    let tmp = TempDir::new().unwrap();
+    squad(tmp.path()).arg("init").assert().success();
+    squad(tmp.path())
+        .args(["join", "cto"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Joined as cto"))
+        .stdout(predicate::str::contains("Interpret this role autonomously"))
+        .stdout(predicate::str::contains("squad send"));
+}
+
+#[test]
 fn test_history() {
     let tmp = TempDir::new().unwrap();
     squad(tmp.path()).arg("init").assert().success();
