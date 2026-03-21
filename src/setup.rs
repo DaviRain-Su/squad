@@ -71,6 +71,8 @@ You are joining a squad multi-agent collaboration team.
    - `squad history` — view message history
 
 4. After completing any task, always run `squad receive <your-id> --wait` to wait for the next message.
+
+5. **IMPORTANT:** If `squad receive --wait` times out with "No new messages", immediately run it again. Keep retrying until a message arrives. Never stop waiting unless the user tells you to.
 "#;
 
 /// TOML format for Gemini CLI (uses {{args}})
@@ -108,6 +110,8 @@ You are joining a squad multi-agent collaboration team.
    - `squad history` — view message history
 
 4. After completing any task, always run `squad receive <your-id> --wait` to wait for the next message.
+
+5. **IMPORTANT:** If `squad receive --wait` times out with "No new messages", immediately run it again. Keep retrying until a message arrives. Never stop waiting unless the user tells you to.
 """
 "#;
 
