@@ -9,20 +9,28 @@ squad runs a local daemon that routes messages between AI CLI agents over MCP, h
 ## Quick Start
 
 ```bash
-# 1. Install (build from source)
-cargo install --path .
+# 1. Install from source (requires Rust / cargo)
+git clone https://github.com/mco-org/squad.git
+cd squad
+./install.sh          # builds & installs squad, squad-mcp, squad-hook
+
+# Or install directly with cargo:
+cargo install --git https://github.com/mco-org/squad
 
 # 2. Initialize a workspace
 cd my-project
 squad init
 
-# 3. Edit squad.yaml to describe your agents and workflow
+# 3. Register the squad MCP server (Claude Code)
+squad setup cc --update-claude-md
+
+# 4. Edit squad.yaml to describe your agents and workflow
 $EDITOR squad.yaml
 
-# 4. Start the daemon
+# 5. Start the daemon
 squad start
 
-# 5. Watch it run
+# 6. Watch it run
 squad watch
 ```
 

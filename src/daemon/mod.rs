@@ -86,26 +86,6 @@ pub trait WorkflowStateStore: Send + Sync {
     async fn save(&self, state: &WorkflowState) -> Result<()>;
 }
 
-#[derive(Default)]
-pub struct StubDaemon;
-
-#[async_trait]
-impl WorkflowDispatcher for StubDaemon {
-    async fn dispatch(&self, _recipient: &str, _message: WorkflowMessage) -> Result<()> {
-        bail!("daemon dispatcher is not implemented yet")
-    }
-}
-
-#[async_trait]
-impl WorkflowStateStore for StubDaemon {
-    async fn load(&self) -> Result<WorkflowState> {
-        bail!("daemon state store is not implemented yet")
-    }
-
-    async fn save(&self, _state: &WorkflowState) -> Result<()> {
-        bail!("daemon state store is not implemented yet")
-    }
-}
 
 #[derive(Clone, Debug)]
 pub struct DaemonPaths {
@@ -199,10 +179,16 @@ pub fn start_daemon(workspace_root: impl AsRef<Path>) -> Result<()> {
     adapter::validate_agent_config(&config)?;
     adapter::maybe_prepare_agent_artifacts(paths.workspace_root(), &config)?;
 
-    if paths.socket_path().exists()
-        && send_request_blocking(paths.socket_path(), &Request::Status).is_ok()
-    {
-        return Ok(());
+    if paths.socket_path().exists() {
+        if send_request_blocking(paths.socket_path(), &Request::Status).is_ok() {
+            eprintln!("squad: daemon is already running ({})", paths.socket_path().display());
+            return Ok(());
+        }
+        // Stale socket left by a previous SIGKILL or crash — clean it up
+        eprintln!(
+            "squad: removing stale socket at {}",
+            paths.socket_path().display()
+        );
     }
 
     remove_if_exists(&paths.socket_path())?;
