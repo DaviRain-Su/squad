@@ -32,6 +32,7 @@ fn setup_cc_creates_mcp_json() {
     let v: Value = serde_json::from_str(&raw).unwrap();
     assert_eq!(v["mcpServers"]["squad"]["command"], "squad-mcp");
     assert_eq!(v["mcpServers"]["squad"]["args"], serde_json::json!([]));
+    assert_eq!(v["mcpServers"]["squad"]["env"]["SQUAD_AGENT_ID"], "cc");
 }
 
 #[test]

@@ -29,7 +29,7 @@ The squad MCP server provides tools for agent communication:
 
 /// Set up .mcp.json for a given agent.
 /// Returns true if the entry was newly written, false if it already existed.
-pub fn setup_mcp_json(workspace: &Path, _agent: &str) -> Result<bool> {
+pub fn setup_mcp_json(workspace: &Path, agent: &str) -> Result<bool> {
     let mcp_path = workspace.join(".mcp.json");
 
     let mut root: Value = if mcp_path.exists() {
@@ -54,7 +54,10 @@ pub fn setup_mcp_json(workspace: &Path, _agent: &str) -> Result<bool> {
         "squad".to_string(),
         json!({
             "command": "squad-mcp",
-            "args": []
+            "args": [],
+            "env": {
+                "SQUAD_AGENT_ID": agent
+            }
         }),
     );
 
@@ -258,6 +261,18 @@ mod tests {
         let raw = std::fs::read_to_string(&mcp_path).unwrap();
         let v: serde_json::Value = serde_json::from_str(&raw).unwrap();
         assert_eq!(v["mcpServers"]["squad"]["command"], "squad-mcp");
+        assert_eq!(v["mcpServers"]["squad"]["env"]["SQUAD_AGENT_ID"], "cc");
+    }
+
+    #[test]
+    fn setup_mcp_json_uses_agent_name_as_squad_agent_id() {
+        for agent in &["codex", "gemini", "qwen"] {
+            let dir = tempdir().unwrap();
+            setup_mcp_json(dir.path(), agent).unwrap();
+            let raw = std::fs::read_to_string(dir.path().join(".mcp.json")).unwrap();
+            let v: serde_json::Value = serde_json::from_str(&raw).unwrap();
+            assert_eq!(v["mcpServers"]["squad"]["env"]["SQUAD_AGENT_ID"], *agent);
+        }
     }
 
     #[test]

@@ -64,6 +64,10 @@ async fn main() -> Result<()> {
             print_usage();
             Ok(())
         }
+        "--version" | "-V" => {
+            println!("squad {}", env!("CARGO_PKG_VERSION"));
+            Ok(())
+        }
         other => bail!("unknown command: {other}"),
     }
 }

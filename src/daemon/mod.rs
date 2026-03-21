@@ -29,22 +29,29 @@ pub mod store;
 pub use server::DaemonServer;
 
 const DEFAULT_CONFIG_TEMPLATE: &str = r#"project: my-project
-heartbeat_timeout_seconds: 30
-recovery:
-  on_agent_offline: reconnect
-  reconnect_attempts: 3
-  reconnect_interval_seconds: 5
+
+agents:
+  builder:
+    adapter: mcp
+  reviewer:
+    adapter: mcp
+
 workflow:
   mode: loop
-  max_iterations: 10
-  on_timeout: stop
-  timeout_seconds: 300
   start_at: implement
+  max_iterations: 6
   steps:
     - id: implement
       agent: builder
       action: implement
-      prompt: "Describe the first task here"
+      message: "Goal: {goal}\nPrevious feedback: {previous_output}\nImplement the required changes."
+      next: review
+    - id: review
+      agent: reviewer
+      action: review
+      message: "Review iteration {iteration}:\n{previous_output}\nReply PASS if acceptable, FAIL with details if not."
+      on_pass: done
+      on_fail: implement
 "#;
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -185,10 +192,7 @@ pub fn start_daemon(workspace_root: impl AsRef<Path>) -> Result<()> {
             return Ok(());
         }
         // Stale socket left by a previous SIGKILL or crash — clean it up
-        eprintln!(
-            "squad: removing stale socket at {}",
-            paths.socket_path().display()
-        );
+        eprintln!("Previous daemon crashed. Cleaning up and starting fresh.");
     }
 
     remove_if_exists(&paths.socket_path())?;

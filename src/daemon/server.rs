@@ -36,6 +36,8 @@ struct DaemonState {
     session_id: String,
     message_store: MessageStore,
     audit_log: AuditLog,
+    /// Agent IDs that are valid targets — populated from config and updated on Register.
+    configured_agents: std::collections::HashSet<String>,
 }
 
 #[derive(Clone)]
@@ -90,6 +92,11 @@ impl DaemonServer {
 
         let config = SquadConfig::from_path(&paths.config_path())?;
         let persistence_enabled = config.persistence.enabled;
+        let mut configured_agents: std::collections::HashSet<String> =
+            config.agents.keys().cloned().collect();
+        for step in &config.workflow.steps {
+            configured_agents.insert(step.agent.clone());
+        }
         let mut workflow_state = if paths.state_path().exists() {
             WorkflowState::load_from_path(&paths.state_path())?
         } else {
@@ -124,6 +131,7 @@ impl DaemonServer {
             session_id,
             message_store,
             audit_log,
+            configured_agents,
         }));
 
         Ok(Self {
@@ -244,6 +252,7 @@ async fn process_legacy_request(
     match request {
         Request::Register { agent_id, role } => {
             let mut guard = state.lock().await;
+            guard.configured_agents.insert(agent_id.clone());
             let registered = guard.registry.register(agent_id.clone(), role.clone());
             let _ = record_audit(
                 &mut guard,
@@ -260,6 +269,13 @@ async fn process_legacy_request(
             let to_for_log = to.clone();
             let from_for_log = from.clone();
             let mut guard = state.lock().await;
+            if !guard.configured_agents.contains(&to_for_log) {
+                return Response::Error {
+                    message: format!(
+                        "unknown agent '{to_for_log}': not in configured agents or registered"
+                    ),
+                };
+            }
             guard.mailbox.push(to, Message::new(from, content));
             let _ = guard.registry.set_status(&to_for_log, "working");
             let _ = guard.registry.heartbeat(&to_for_log);
@@ -283,6 +299,13 @@ async fn process_legacy_request(
         }
         Request::CheckInbox { agent_id } => {
             let mut guard = state.lock().await;
+            let unknown_warning = if !guard.configured_agents.contains(&agent_id) {
+                Some(format!(
+                    "agent '{agent_id}' is not in configured agents; inbox may always be empty"
+                ))
+            } else {
+                None
+            };
             let _ = guard.registry.heartbeat(&agent_id);
             let message = guard.mailbox.pop(&agent_id);
             if message.is_some() {
@@ -299,7 +322,7 @@ async fn process_legacy_request(
             }
             drop(guard);
             let _ = persist_session(state.clone(), &paths).await;
-            Response::ok(json!({ "message": message }))
+            Response::ok(json!({ "message": message, "warning": unknown_warning }))
         }
         Request::MarkDone { agent_id, message } => {
             let _ = advance_workflow(state.clone(), paths.clone(), &agent_id, &message).await;
@@ -360,6 +383,13 @@ async fn process_envelope_request(
             let content_for_log = content.clone();
             let to_for_log = to.clone();
             let mut guard = state.lock().await;
+            if !guard.configured_agents.contains(&to_for_log) {
+                return DaemonResponse::Error {
+                    message: format!(
+                        "unknown agent '{to_for_log}': not in configured agents or registered"
+                    ),
+                };
+            }
             guard
                 .mailbox
                 .push(to, Message::new(default_agent_id.clone(), content));

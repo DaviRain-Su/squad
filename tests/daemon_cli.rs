@@ -53,7 +53,9 @@ fn init_creates_template_config() {
 
     let config = fs::read_to_string(workspace.path().join("squad.yaml")).expect("read config");
     assert!(config.contains("project: my-project"));
-    assert!(config.contains("max_iterations: 10"));
+    assert!(config.contains("max_iterations: 6"));
+    assert!(config.contains("agent: builder"));
+    assert!(config.contains("agent: reviewer"));
 }
 
 #[test]
