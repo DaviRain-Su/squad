@@ -1,103 +1,91 @@
-use anyhow::{bail, Context, Result};
+use anyhow::{bail, Result};
+use std::path::{Path, PathBuf};
 
-#[tokio::main]
-async fn main() -> Result<()> {
+fn main() -> Result<()> {
     let mut args = std::env::args().skip(1);
     let command = args.next().unwrap_or_else(|| "help".to_string());
-    let workspace = std::env::current_dir()?;
 
     match command.as_str() {
-        "init" => {
-            let flag = args.next();
-            let fresh = matches!(flag.as_deref(), Some("--fresh") | Some("--force"));
-            squad::daemon::init_workspace_with_options(&workspace, fresh)
-        }
-        "start" => squad::daemon::start_daemon(&workspace),
-        "status" => {
-            print!("{}", squad::daemon::status_text(&workspace)?);
-            Ok(())
-        }
-        "stop" => squad::daemon::stop_daemon(&workspace),
-        "log" => {
-            let mut tail = None;
-            let mut filter = None;
+        "init" => cmd_init(),
+        "join" => {
+            let id = args.next().unwrap_or_default();
+            if id.is_empty() {
+                bail!("Usage: squad join <id> [--role <role>]");
+            }
+            let mut role = id.clone();
             let extra: Vec<String> = args.collect();
-            let mut index = 0;
-            while index < extra.len() {
-                match extra[index].as_str() {
-                    "--tail" => {
-                        let value = extra
-                            .get(index + 1)
-                            .context("--tail requires a numeric value")?;
-                        tail = Some(value.parse::<usize>().context("invalid --tail value")?);
-                        index += 2;
-                    }
-                    "--filter" => {
-                        let value = extra
-                            .get(index + 1)
-                            .context("--filter requires key=value")?;
-                        filter = Some(value.clone());
-                        index += 2;
-                    }
-                    other => bail!("unknown log flag: {other}"),
-                }
-            }
-            print!("{}", squad::daemon::log_text(&workspace, tail, filter.as_deref())?);
-            Ok(())
-        }
-        "history" => {
-            print!("{}", squad::daemon::history_text(&workspace)?);
-            Ok(())
-        }
-        "clean" => squad::daemon::clean_history(&workspace),
-        "watch" => squad::tui::run(&workspace),
-        "run" => {
-            let goal: String = std::iter::once(args.next())
-                .flatten()
-                .chain(args)
-                .collect::<Vec<_>>()
-                .join(" ");
-            if goal.trim().is_empty() {
-                bail!("Usage: squad run <goal>\nExample: squad run \"implement login feature\"");
-            }
-            let paths = squad::daemon::DaemonPaths::new(&workspace);
-            let response = squad::daemon::send_request(
-                paths.socket_path(),
-                &squad::protocol::Request::StartWorkflow { goal },
-            )
-            .await
-            .map_err(|err| {
-                let msg = err.to_string();
-                if msg.contains("failed to connect")
-                    || msg.contains("No such file")
-                    || msg.contains("Connection refused")
-                    || msg.contains("os error 2")
-                {
-                    anyhow::anyhow!(
-                        "Squad daemon is not running. Run squad start first."
-                    )
+            let mut i = 0;
+            while i < extra.len() {
+                if extra[i] == "--role" {
+                    role = extra
+                        .get(i + 1)
+                        .cloned()
+                        .unwrap_or_else(|| id.clone());
+                    i += 2;
                 } else {
-                    err
+                    i += 1;
                 }
-            })?;
-            match response {
-                squad::protocol::Response::Ok(_) => {
-                    println!("Workflow started. Run 'squad watch' to observe progress.");
-                    Ok(())
-                }
-                squad::protocol::Response::Error { message } => bail!(message),
             }
+            cmd_join(&id, &role)
         }
-        "daemon-run" => squad::daemon::run_daemon_foreground(&workspace).await,
-        "setup" => {
-            let sub = args.next().unwrap_or_default();
-            run_setup(&workspace, &sub, args.collect())
+        "leave" => {
+            let id = args.next().unwrap_or_default();
+            if id.is_empty() {
+                bail!("Usage: squad leave <id>");
+            }
+            cmd_leave(&id)
         }
-        "doctor" => {
-            let results = squad::setup::run_doctor(&workspace)?;
-            print!("{}", squad::setup::render_doctor_results(&results));
-            Ok(())
+        "agents" => cmd_agents(),
+        "send" => {
+            let from = args.next().unwrap_or_default();
+            let to = args.next().unwrap_or_default();
+            let message: String = args.collect::<Vec<_>>().join(" ");
+            if from.is_empty() || to.is_empty() || message.is_empty() {
+                bail!("Usage: squad send <from> <to> <message>");
+            }
+            cmd_send(&from, &to, &message)
         }
+        "receive" => {
+            let id = args.next().unwrap_or_default();
+            if id.is_empty() {
+                bail!("Usage: squad receive <id> [--wait] [--timeout <secs>]");
+            }
+            let mut wait = false;
+            let mut timeout_secs: u64 = 120;
+            let extra: Vec<String> = args.collect();
+            let mut i = 0;
+            while i < extra.len() {
+                match extra[i].as_str() {
+                    "--wait" => {
+                        wait = true;
+                        i += 1;
+                    }
+                    "--timeout" => {
+                        if let Some(val) = extra.get(i + 1) {
+                            timeout_secs = val.parse().unwrap_or(120);
+                        }
+                        i += 2;
+                    }
+                    _ => i += 1,
+                }
+            }
+            cmd_receive(&id, wait, timeout_secs)
+        }
+        "pending" => cmd_pending(),
+        "history" => {
+            let agent = args.next();
+            cmd_history(agent.as_deref())
+        }
+        "roles" => cmd_roles(),
+        "teams" => cmd_teams(),
+        "team" => {
+            let name = args.next().unwrap_or_default();
+            if name.is_empty() {
+                bail!("Usage: squad team <name>");
+            }
+            cmd_team(&name)
+        }
+        "clean" => cmd_clean(),
         "help" | "--help" | "-h" => {
             print_usage();
             Ok(())
@@ -106,78 +94,238 @@ async fn main() -> Result<()> {
             println!("squad {}", env!("CARGO_PKG_VERSION"));
             Ok(())
         }
-        other => bail!("unknown command: {other}"),
+        other => bail!("unknown command: {other}. Run 'squad help' for usage."),
     }
 }
 
-fn run_setup(workspace: &std::path::Path, sub: &str, extra: Vec<String>) -> Result<()> {
-    use squad::setup::{
-        agent_instructions, setup_hook_agent, setup_mcp_json, update_claude_md, MCP_AGENTS,
-        SUPPORTED_AGENTS,
-    };
+// --- Helpers ---
 
-    // squad setup --list
-    if sub == "--list" || sub == "-l" {
-        println!("Supported agents: {}", SUPPORTED_AGENTS.join(", "));
-        return Ok(());
-    }
-
-    if sub.is_empty() {
-        bail!("Usage: squad setup <agent> [--update-claude-md]\n       squad setup --list");
-    }
-
-    if !SUPPORTED_AGENTS.contains(&sub) {
-        bail!(
-            "unknown agent '{}'. Supported: {}",
-            sub,
-            SUPPORTED_AGENTS.join(", ")
-        );
-    }
-
-    let update_claude = extra.iter().any(|arg| arg == "--update-claude-md");
-
-    if MCP_AGENTS.contains(&sub) {
-        // MCP agent: write .mcp.json
-        match setup_mcp_json(workspace, sub)? {
-            true => println!(".mcp.json: squad MCP server registered."),
-            false => println!(".mcp.json: squad entry already configured."),
+fn find_workspace() -> Result<PathBuf> {
+    let mut dir = std::env::current_dir()?;
+    loop {
+        if dir.join(".squad").exists() {
+            return Ok(dir);
         }
-        if update_claude {
-            match update_claude_md(workspace)? {
-                true => println!("CLAUDE.md: Squad Collaboration Protocol section appended."),
-                false => println!("CLAUDE.md: Squad Collaboration Protocol section already present."),
+        if !dir.pop() {
+            bail!("Not a squad workspace. Run 'squad init' first.");
+        }
+    }
+}
+
+fn open_store(workspace: &Path) -> Result<squad::store::Store> {
+    let db_path = workspace.join(".squad").join("messages.db");
+    squad::store::Store::open(&db_path)
+}
+
+fn print_messages(messages: &[squad::store::MessageRecord]) {
+    for msg in messages {
+        println!("[from {}] {}", msg.from_agent, msg.content);
+    }
+}
+
+// --- Commands ---
+
+fn cmd_init() -> Result<()> {
+    let workspace = std::env::current_dir()?;
+    squad::init::init_workspace(&workspace)?;
+    println!("Initialized squad workspace.");
+    Ok(())
+}
+
+fn cmd_join(id: &str, role: &str) -> Result<()> {
+    let workspace = find_workspace()?;
+    let store = open_store(&workspace)?;
+    store.register_agent(id, role)?;
+    println!("Joined as {id} (role: {role}).");
+
+    // Output role prompt if available
+    if let Ok(prompt) = squad::roles::load_role(&workspace, role) {
+        println!("\n=== Role Instructions ===\n{prompt}");
+    }
+    Ok(())
+}
+
+fn cmd_leave(id: &str) -> Result<()> {
+    let workspace = find_workspace()?;
+    let store = open_store(&workspace)?;
+    store.unregister_agent(id)?;
+    println!("{id} left the squad.");
+    Ok(())
+}
+
+fn cmd_agents() -> Result<()> {
+    let workspace = find_workspace()?;
+    let store = open_store(&workspace)?;
+    let agents = store.list_agents()?;
+    if agents.is_empty() {
+        println!("No agents online.");
+    } else {
+        for agent in &agents {
+            println!("  {} (role: {})", agent.id, agent.role);
+        }
+    }
+    Ok(())
+}
+
+fn cmd_send(from: &str, to: &str, content: &str) -> Result<()> {
+    let workspace = find_workspace()?;
+    let store = open_store(&workspace)?;
+    if to == "@all" {
+        let recipients = store.broadcast_message(from, content)?;
+        println!(
+            "Broadcast to {} agents: {}",
+            recipients.len(),
+            recipients.join(", ")
+        );
+    } else {
+        store.send_message_checked(from, to, content)?;
+        println!("Sent to {to}.");
+    }
+    Ok(())
+}
+
+fn cmd_receive(agent: &str, wait: bool, timeout_secs: u64) -> Result<()> {
+    let workspace = find_workspace()?;
+
+    if wait {
+        let deadline =
+            std::time::Instant::now() + std::time::Duration::from_secs(timeout_secs);
+        loop {
+            let store = open_store(&workspace)?;
+            if store.has_unread_messages(agent)? {
+                let messages = store.receive_messages(agent)?;
+                if !messages.is_empty() {
+                    print_messages(&messages);
+                    return Ok(());
+                }
             }
+            if std::time::Instant::now() > deadline {
+                println!("No new messages (timed out after {timeout_secs}s).");
+                return Ok(());
+            }
+            std::thread::sleep(std::time::Duration::from_millis(500));
         }
     } else {
-        // Hook agent: write .squad/hooks/<agent>.sh
-        match setup_hook_agent(workspace, sub)? {
-            true => println!(".squad/hooks/{sub}.sh: hook script created."),
-            false => println!(".squad/hooks/{sub}.sh: hook script already exists."),
+        let store = open_store(&workspace)?;
+        let messages = store.receive_messages(agent)?;
+        if messages.is_empty() {
+            println!("No new messages.");
+        } else {
+            print_messages(&messages);
+        }
+        Ok(())
+    }
+}
+
+fn cmd_pending() -> Result<()> {
+    let workspace = find_workspace()?;
+    let store = open_store(&workspace)?;
+    let messages = store.pending_messages()?;
+    if messages.is_empty() {
+        println!("No pending messages.");
+    } else {
+        println!("Pending messages:");
+        for msg in &messages {
+            let preview: String = msg.content.chars().take(60).collect();
+            let suffix = if msg.content.chars().count() > 60 {
+                "..."
+            } else {
+                ""
+            };
+            println!(
+                "  {} -> {}: {}{}",
+                msg.from_agent, msg.to_agent, preview, suffix
+            );
         }
     }
+    Ok(())
+}
 
-    println!("{}", agent_instructions(sub));
+fn cmd_history(agent_id: Option<&str>) -> Result<()> {
+    let workspace = find_workspace()?;
+    let store = open_store(&workspace)?;
+    let messages = store.all_messages(agent_id)?;
+    if messages.is_empty() {
+        println!("No message history.");
+    } else {
+        for msg in &messages {
+            let marker = if msg.read { "  " } else { "* " };
+            println!(
+                "{marker}{} -> {}: {}",
+                msg.from_agent, msg.to_agent, msg.content
+            );
+        }
+    }
+    Ok(())
+}
+
+fn cmd_roles() -> Result<()> {
+    let workspace = find_workspace()?;
+    let roles = squad::roles::list_roles(&workspace);
+    println!("Available roles:");
+    for role in &roles {
+        println!("  {role}");
+    }
+    Ok(())
+}
+
+fn cmd_teams() -> Result<()> {
+    let workspace = find_workspace()?;
+    let teams = squad::teams::list_teams(&workspace);
+    println!("Available teams:");
+    for team in &teams {
+        println!("  {team}");
+    }
+    Ok(())
+}
+
+fn cmd_team(name: &str) -> Result<()> {
+    let workspace = find_workspace()?;
+    let team = squad::teams::load_team(&workspace, name)?;
+    println!("Team: {}", team.name);
+    println!("Roles:");
+    for (role_id, role) in &team.roles {
+        println!("  {role_id} (prompt: {})", role.prompt_file);
+        println!("    → squad join {role_id} --role {}", role.prompt_file);
+    }
+    Ok(())
+}
+
+fn cmd_clean() -> Result<()> {
+    let workspace = find_workspace()?;
+    let db_path = workspace.join(".squad").join("messages.db");
+    if db_path.exists() {
+        std::fs::remove_file(&db_path)?;
+    }
+    // Also remove WAL and SHM files
+    let wal = workspace.join(".squad").join("messages.db-wal");
+    let shm = workspace.join(".squad").join("messages.db-shm");
+    if wal.exists() {
+        std::fs::remove_file(&wal)?;
+    }
+    if shm.exists() {
+        std::fs::remove_file(&shm)?;
+    }
+    println!("Cleaned squad state.");
     Ok(())
 }
 
 fn print_usage() {
-    println!(
-        "Usage: squad <init|start|run|status|stop|log|history|clean|watch|setup|doctor>"
-    );
+    println!("squad v{} — Multi-AI-agent terminal collaboration", env!("CARGO_PKG_VERSION"));
+    println!();
+    println!("Usage: squad <command> [args]");
     println!();
     println!("Commands:");
-    println!("  init               Initialise workspace (writes squad.yaml)");
-    println!("    --force             Overwrite existing squad.yaml");
-    println!("  run <goal>         Start the workflow with a goal string");
-    println!("  start              Start the daemon");
-    println!("  status             Show daemon status");
-    println!("  stop               Stop the daemon");
-    println!("  log                Show audit log (--tail N, --filter key=value)");
-    println!("  history            Show message history summary");
-    println!("  clean              Remove runtime artefacts");
-    println!("  watch              Open TUI dashboard");
-    println!("  setup <agent>      Register squad MCP server for an agent");
-    println!("    --update-claude-md  Also append Squad Collaboration Protocol to CLAUDE.md");
-    println!("    --list              List supported agents");
-    println!("  doctor             Diagnose daemon, squad-mcp, and .mcp.json");
+    println!("  init                                Initialize workspace");
+    println!("  join <id> [--role <role>]            Join as agent (role defaults to id)");
+    println!("  leave <id>                           Remove agent");
+    println!("  agents                               List online agents");
+    println!("  send <from> <to> <message>           Send message (use @all to broadcast)");
+    println!("  receive <id> [--wait] [--timeout N]  Check inbox (--wait blocks until message)");
+    println!("  pending                              Show all unread messages");
+    println!("  history [agent]                      Show all messages (including read)");
+    println!("  roles                                List available roles");
+    println!("  teams                                List available teams");
+    println!("  team <name>                          Show team template");
+    println!("  clean                                Clear all state");
 }

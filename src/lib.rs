@@ -1,8 +1,4 @@
-pub mod adapter;
-pub mod config;
-pub mod daemon;
-pub mod mcp;
-pub mod protocol;
-pub mod setup;
-pub mod tui;
-pub mod workflow;
+pub mod init;
+pub mod roles;
+pub mod store;
+pub mod teams;
