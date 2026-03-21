@@ -354,6 +354,28 @@ async fn process_legacy_request(
             let _ = append_watch_message(&paths, "ping", format!("ping agent {agent_id}"));
             Response::ok(json!({ "pinged": agent_id }))
         }
+        Request::StartWorkflow { goal } => {
+            let workflow_config = {
+                let guard = state.lock().await;
+                guard.workflow_config.clone()
+            };
+            let mut workflow_state = crate::workflow::WorkflowState::new(workflow_config.start_at.clone());
+            workflow_state.goal = goal.clone();
+            let dispatcher = ServerDispatcher { paths: paths.clone(), state: state.clone() };
+            let engine = crate::workflow::engine::WorkflowEngine::new(workflow_config, dispatcher);
+            if let Err(err) = engine.start(&mut workflow_state, &goal).await {
+                return Response::error(format!("failed to start workflow: {err:#}"));
+            }
+            if let Err(err) = workflow_state.save_to_path(&paths.state_path()) {
+                return Response::error(format!("failed to save workflow state: {err:#}"));
+            }
+            {
+                let mut guard = state.lock().await;
+                guard.workflow_state = workflow_state;
+            }
+            let _ = persist_session(state.clone(), &paths).await;
+            Response::ok(json!({ "started": true, "goal": goal }))
+        }
         Request::Status => {
             let guard = state.lock().await;
             Response::ok(json!({
@@ -478,6 +500,34 @@ async fn process_envelope_request(
                 },
             }
         }
+        DaemonRequest::StartWorkflow { goal } => {
+            let workflow_config = {
+                let guard = state.lock().await;
+                guard.workflow_config.clone()
+            };
+            let mut workflow_state = crate::workflow::WorkflowState::new(workflow_config.start_at.clone());
+            workflow_state.goal = goal.clone();
+            let dispatcher = ServerDispatcher { paths: paths.clone(), state: state.clone() };
+            let engine = crate::workflow::engine::WorkflowEngine::new(workflow_config, dispatcher);
+            if let Err(err) = engine.start(&mut workflow_state, &goal).await {
+                return DaemonResponse::Error {
+                    message: format!("failed to start workflow: {err:#}"),
+                };
+            }
+            if let Err(err) = workflow_state.save_to_path(&paths.state_path()) {
+                return DaemonResponse::Error {
+                    message: format!("failed to save workflow state: {err:#}"),
+                };
+            }
+            {
+                let mut guard = state.lock().await;
+                guard.workflow_state = workflow_state;
+            }
+            let _ = persist_session(state.clone(), &paths).await;
+            DaemonResponse::Ack {
+                message: format!("workflow started: {goal}"),
+            }
+        }
     }
 }
 
@@ -496,9 +546,10 @@ async fn advance_workflow(
         paths: paths.clone(),
         state: state.clone(),
     };
+    let goal = workflow_state.goal.clone();
     let mut engine = WorkflowEngine::new(workflow_config, dispatcher);
     let _ = engine
-        .handle_mark_done_with_goal(&mut workflow_state, agent_id, summary, "")
+        .handle_mark_done_with_goal(&mut workflow_state, agent_id, summary, &goal)
         .await?;
     workflow_state.save_to_path(&paths.state_path())?;
 

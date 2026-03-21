@@ -133,3 +133,81 @@ fn daemon_lifecycle_handles_socket_requests() {
     );
     wait_for(|| !socket_path.exists());
 }
+
+#[test]
+fn init_does_not_overwrite_existing_config() {
+    let workspace = tempdir().expect("tempdir");
+    let init_output = run_cli(workspace.path(), &["init"]);
+    assert!(init_output.status.success());
+
+    let config_path = workspace.path().join("squad.yaml");
+    fs::write(&config_path, "project: custom\n").expect("write custom config");
+
+    let second_output = run_cli(workspace.path(), &["init"]);
+    assert!(second_output.status.success());
+
+    let config = fs::read_to_string(&config_path).expect("read config");
+    assert_eq!(config, "project: custom\n", "config should not be overwritten without --force");
+}
+
+#[test]
+fn init_force_overwrites_existing_config() {
+    let workspace = tempdir().expect("tempdir");
+    run_cli(workspace.path(), &["init"]);
+
+    let config_path = workspace.path().join("squad.yaml");
+    fs::write(&config_path, "project: custom\n").expect("write custom config");
+
+    let force_output = run_cli(workspace.path(), &["init", "--force"]);
+    assert!(force_output.status.success());
+
+    let config = fs::read_to_string(&config_path).expect("read config");
+    assert!(config.contains("project: my-project"), "config should be overwritten with --force");
+}
+
+#[test]
+fn run_delivers_goal_to_first_agent_inbox() {
+    let workspace = tempdir().expect("tempdir");
+    let init_output = run_cli(workspace.path(), &["init"]);
+    assert!(init_output.status.success());
+
+    let start_output = run_cli(workspace.path(), &["start"]);
+    assert!(
+        start_output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&start_output.stderr)
+    );
+
+    let socket_path = workspace.path().join(".squad/squad.sock");
+    wait_for(|| socket_path.exists());
+
+    // Register the first agent (builder) so it is a valid send target
+    let register = send_request(
+        &socket_path,
+        json!({ "Register": { "agent_id": "builder", "role": "implementer" } }),
+    );
+    assert_eq!(register["Ok"]["agent_id"], "builder");
+
+    let run_output = run_cli(workspace.path(), &["run", "implement login feature"]);
+    assert!(
+        run_output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&run_output.stderr)
+    );
+
+    let inbox = send_request(
+        &socket_path,
+        json!({ "CheckInbox": { "agent_id": "builder" } }),
+    );
+    let content = inbox["Ok"]["message"]["content"]
+        .as_str()
+        .expect("inbox message content");
+    assert!(
+        content.contains("implement login feature"),
+        "builder inbox should contain the goal; got: {content}"
+    );
+
+    let stop_output = run_cli(workspace.path(), &["stop"]);
+    assert!(stop_output.status.success());
+    wait_for(|| !socket_path.exists());
+}

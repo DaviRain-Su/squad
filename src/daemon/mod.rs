@@ -169,6 +169,13 @@ pub fn init_workspace(workspace_root: impl AsRef<Path>) -> Result<()> {
 
 pub fn init_workspace_with_options(workspace_root: impl AsRef<Path>, fresh: bool) -> Result<()> {
     let paths = DaemonPaths::new(workspace_root);
+    if paths.config_path().exists() && !fresh {
+        eprintln!(
+            "squad: {} already exists. Use --force to overwrite.",
+            paths.config_path().display()
+        );
+        return Ok(());
+    }
     if fresh {
         clean_history(paths.workspace_root())?;
     }

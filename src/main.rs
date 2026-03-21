@@ -8,7 +8,8 @@ async fn main() -> Result<()> {
 
     match command.as_str() {
         "init" => {
-            let fresh = matches!(args.next().as_deref(), Some("--fresh"));
+            let flag = args.next();
+            let fresh = matches!(flag.as_deref(), Some("--fresh") | Some("--force"));
             squad::daemon::init_workspace_with_options(&workspace, fresh)
         }
         "start" => squad::daemon::start_daemon(&workspace),
@@ -50,6 +51,29 @@ async fn main() -> Result<()> {
         }
         "clean" => squad::daemon::clean_history(&workspace),
         "watch" => squad::tui::run(&workspace),
+        "run" => {
+            let goal: String = std::iter::once(args.next())
+                .flatten()
+                .chain(args)
+                .collect::<Vec<_>>()
+                .join(" ");
+            if goal.trim().is_empty() {
+                bail!("Usage: squad run <goal>\nExample: squad run \"implement login feature\"");
+            }
+            let paths = squad::daemon::DaemonPaths::new(&workspace);
+            match squad::daemon::send_request(
+                paths.socket_path(),
+                &squad::protocol::Request::StartWorkflow { goal },
+            )
+            .await?
+            {
+                squad::protocol::Response::Ok(_) => {
+                    println!("Workflow started. Run 'squad watch' to observe progress.");
+                    Ok(())
+                }
+                squad::protocol::Response::Error { message } => bail!(message),
+            }
+        }
         "daemon-run" => squad::daemon::run_daemon_foreground(&workspace).await,
         "setup" => {
             let sub = args.next().unwrap_or_default();
@@ -115,11 +139,13 @@ fn run_setup(workspace: &std::path::Path, sub: &str, extra: Vec<String>) -> Resu
 
 fn print_usage() {
     println!(
-        "Usage: squad <init|start|status|stop|log|history|clean|watch|setup|doctor>"
+        "Usage: squad <init|start|run|status|stop|log|history|clean|watch|setup|doctor>"
     );
     println!();
     println!("Commands:");
     println!("  init               Initialise workspace (writes squad.yaml)");
+    println!("    --force             Overwrite existing squad.yaml");
+    println!("  run <goal>         Start the workflow with a goal string");
     println!("  start              Start the daemon");
     println!("  status             Show daemon status");
     println!("  stop               Stop the daemon");

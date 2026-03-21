@@ -15,6 +15,7 @@ pub enum DaemonRequest {
     MarkDone { summary: String },
     Heartbeat { agent_id: String },
     GetAgentStatus { agent_id: String },
+    StartWorkflow { goal: String },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -85,6 +86,7 @@ pub enum Request {
     Heartbeat { agent_id: String },
     GetAgentStatus { agent_id: String },
     PingAgent { agent_id: String },
+    StartWorkflow { goal: String },
     Status,
     Shutdown,
 }

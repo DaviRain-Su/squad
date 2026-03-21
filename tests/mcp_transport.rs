@@ -97,11 +97,12 @@ async fn tools_list_returns_three_tools() -> Result<()> {
 
     let response = read_frame(&mut client_side).await?;
     let tools = response["result"]["tools"].as_array().expect("tools array");
-    assert_eq!(tools.len(), 4);
+    assert_eq!(tools.len(), 5);
     assert_eq!(tools[0]["name"], "send_message");
     assert_eq!(tools[1]["name"], "check_inbox");
     assert_eq!(tools[2]["name"], "mark_done");
     assert_eq!(tools[3]["name"], "send_heartbeat");
+    assert_eq!(tools[4]["name"], "start_workflow");
 
     task.await??;
     Ok(())

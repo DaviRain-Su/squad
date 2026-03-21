@@ -18,6 +18,10 @@ pub struct WorkflowState {
     pub active_steps: Vec<String>,
     #[serde(default)]
     pub parallel_outputs: Vec<String>,
+    /// The goal string passed to `squad run`. Stored so subsequent `mark_done`
+    /// calls can render `{goal}` in step messages without losing the value.
+    #[serde(default)]
+    pub goal: String,
 }
 
 impl WorkflowState {
@@ -35,6 +39,7 @@ impl WorkflowState {
             previous_output: None,
             active_steps,
             parallel_outputs: Vec::new(),
+            goal: String::new(),
         }
     }
 

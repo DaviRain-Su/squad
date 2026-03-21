@@ -73,6 +73,14 @@ impl DaemonClient {
         }
     }
 
+    pub async fn start_workflow(&self, goal: String) -> Result<()> {
+        match self.send(DaemonRequest::StartWorkflow { goal }).await? {
+            DaemonResponse::Ack { .. } => Ok(()),
+            DaemonResponse::Error { message } => bail!(message),
+            other => bail!("unexpected daemon response: {other:?}"),
+        }
+    }
+
     pub async fn get_agent_status(&self, agent_id: String) -> Result<AgentStatus> {
         match self.send(DaemonRequest::GetAgentStatus { agent_id }).await? {
             DaemonResponse::AgentStatus { agent_status } => Ok(agent_status),
@@ -84,7 +92,12 @@ impl DaemonClient {
     async fn send(&self, request: DaemonRequest) -> Result<DaemonResponse> {
         let stream = UnixStream::connect(self.socket_path())
             .await
-            .with_context(|| format!("failed to connect to {}", self.socket_path().display()))?;
+            .with_context(|| {
+                format!(
+                    "failed to connect to {}. Run squad start first.",
+                    self.socket_path().display()
+                )
+            })?;
         let mut reader = BufReader::new(stream);
         let envelope = DaemonEnvelope {
             id: request_id(),
