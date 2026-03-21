@@ -13,11 +13,8 @@ pub const PLATFORMS: &[Platform] = &[
         binary: "claude",
         command_path: ".claude/commands/squad.md",
     },
-    Platform {
-        name: "gemini",
-        binary: "gemini",
-        command_path: ".gemini/antigravity/global_workflows/squad.md",
-    },
+    // Gemini CLI: custom slash commands not yet supported.
+    // ~/.gemini/antigravity/global_workflows/ is not a native command directory.
     Platform {
         name: "codex",
         binary: "codex",

@@ -66,7 +66,6 @@ Supported platforms:
 | Platform | Binary | Command location |
 |----------|--------|-----------------|
 | Claude Code | `claude` | `~/.claude/commands/squad.md` |
-| Gemini CLI | `gemini` | `~/.gemini/antigravity/global_workflows/squad.md` |
 | Codex CLI | `codex` | `~/.codex/prompts/squad.md` |
 | OpenCode | `opencode` | `~/.config/opencode/commands/squad.md` |
 

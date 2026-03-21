@@ -3,10 +3,9 @@ use tempfile::TempDir;
 
 #[test]
 fn test_platforms_defined() {
-    assert!(PLATFORMS.len() >= 4);
+    assert!(PLATFORMS.len() >= 3);
     let names: Vec<&str> = PLATFORMS.iter().map(|p| p.name).collect();
     assert!(names.contains(&"claude"));
-    assert!(names.contains(&"gemini"));
     assert!(names.contains(&"codex"));
     assert!(names.contains(&"opencode"));
 }

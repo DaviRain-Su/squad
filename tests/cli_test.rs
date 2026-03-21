@@ -129,8 +129,8 @@ fn test_setup_list() {
         .assert()
         .success()
         .stdout(predicate::str::contains("claude"))
-        .stdout(predicate::str::contains("gemini"))
-        .stdout(predicate::str::contains("codex"));
+        .stdout(predicate::str::contains("codex"))
+        .stdout(predicate::str::contains("opencode"));
 }
 
 #[test]
