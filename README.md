@@ -40,12 +40,22 @@
 
 ---
 
+## Install
+
+```bash
+# Homebrew (macOS)
+brew install mco-org/tap/squad
+
+# Or download prebuilt binary from GitHub Releases
+# https://github.com/mco-org/squad/releases
+
+# Or build from source
+cargo install --git https://github.com/mco-org/squad.git
+```
+
 ## Quick Start
 
 ```bash
-# Install
-cargo install --path .
-
 # Install /squad slash command for your AI tools
 squad setup
 

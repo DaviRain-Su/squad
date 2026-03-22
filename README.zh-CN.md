@@ -42,10 +42,22 @@
 
 ## 快速开始
 
-```bash
-# 安装
-cargo install --path .
+## 安装
 
+```bash
+# Homebrew (macOS)
+brew install mco-org/tap/squad
+
+# 或从 GitHub Releases 下载预编译二进制
+# https://github.com/mco-org/squad/releases
+
+# 或从源码编译
+cargo install --git https://github.com/mco-org/squad.git
+```
+
+## 快速开始
+
+```bash
 # 安装 /squad 斜杠命令到已有的 AI 工具
 squad setup
 
