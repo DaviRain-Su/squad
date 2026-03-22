@@ -1,72 +1,54 @@
-# Poll-based Receive — Fix AI Tool Compatibility
+# Non-blocking Receive — Fix AI Tool Compatibility
 
-**Goal:** Replace blocking `--wait` with non-blocking `--poll` as the default receive behavior, eliminating the double-consumer race condition caused by AI tools backgrounding long-running commands.
+**Goal:** Eliminate the double-consumer race condition caused by AI tools backgrounding `squad receive --wait`.
 
-**Problem:** `squad receive --wait` is a long-polling command that blocks until a message arrives (default 3600s). AI tools (Claude Code, Gemini, Codex) have bash execution timeouts (120-300s) that either kill or background the command. When backgrounded, the AI agent starts a second receive, creating two consumers competing for the same messages. The `receive_messages` atomic transaction (SELECT + UPDATE read=1) is single-consumer — the loser never sees the message.
+**Problem:** `squad receive --wait` blocks for up to 3600s. AI tools (Claude Code, Gemini, Codex) have bash timeouts (120-300s) that background the command. The AI agent then starts a second receive, creating two consumers competing for the same messages. The loser never sees the message.
 
-**Root cause:** Long-polling conflicts with AI tools' "execute → get result → think → execute" model.
+**Root cause:** The slash command templates and role files instruct AI agents to use `--wait`. Remove that instruction and the problem disappears.
 
 ## Solution
 
-### 1. Make `--poll` the default behavior
+**Template-only fix.** No new CLI flags needed.
 
-```bash
-squad receive worker2              # default: check once, return immediately (current no-flag behavior, unchanged)
-squad receive worker2 --poll 5     # check up to 5 times, 2s interval, max 10s total
-squad receive worker2 --wait       # legacy long-poll, opt-in for manual/debug use only
+`squad receive <id>` (without `--wait`) already exists — it checks once and returns immediately. This naturally fits AI tools' "execute → get result → think → execute" model.
+
+### Changes
+
+1. **Update slash command templates** — replace `squad receive <id> --wait` with `squad receive <id>` in all instructions. Remove the "retry on timeout" instruction.
+
+2. **Update role templates** — worker.md, manager.md, inspector.md: replace `--wait` with plain receive.
+
+3. **Update freeform role fallback** — main.rs `cmd_join` prints `--wait` for roles without a template file.
+
+4. **Update README and help text** — remove "The --wait Pattern" section, update examples.
+
+5. **Harden receive transaction** — add `id <= max_id` fence to the UPDATE in `receive_messages` to prevent phantom read (a message arriving between SELECT and UPDATE getting silently marked as read).
+
+### What we're NOT doing
+
+- ~~`--poll N` flag~~ — unnecessary. `squad receive` already does a one-shot check. AI agents naturally retry on their own.
+- ~~Split transaction~~ — the DEFERRED transaction provides value (groups SELECT+UPDATE). Splitting it introduces a worse phantom read bug.
+- ~~Deprecation warning on --wait~~ — keep it working for manual/debug use, just don't recommend it.
+
+## Behavior after fix
+
+```
+AI agent completes task
+  → squad send worker manager "done"
+  → squad receive worker              ← instant check, returns immediately
+  → no messages? continue other work
+  → check again when ready
 ```
 
-`--poll N` checks for messages N times with a short interval (2s). Total runtime is bounded and short enough to never trigger bash tool timeouts. If messages arrive during polling, they're returned immediately.
-
-The existing no-flag behavior (`squad receive worker2`) already checks once and returns — this stays unchanged and becomes the recommended default for AI agents.
-
-### 2. Split receive transaction (safety net)
-
-Change `receive_messages` from atomic (SELECT+UPDATE in one transaction) to two-phase:
-1. SELECT unread messages (no transaction)
-2. Print/return messages
-3. UPDATE mark as read
-
-This ensures that if two consumers exist (despite best efforts), both can see the message. Duplicate delivery is acceptable; message loss is not.
-
-### 3. Update slash command templates
-
-Change from:
-```
-After completing any task, always run `squad receive <your-id> --wait` to wait for the next message.
-```
-
-To:
-```
-After completing any task, check for new messages:
-  squad receive <your-id>
-If no messages, continue with other work or check again shortly.
-```
-
-Remove the `--wait` retry instruction entirely.
-
-## Behavior Matrix
-
-| Command | Behavior | Duration | AI-safe |
-|---------|----------|----------|---------|
-| `squad receive <id>` | Check once, return | instant | yes |
-| `squad receive <id> --poll 5` | Check 5x, 2s interval | max 10s | yes |
-| `squad receive <id> --poll` | Check 5x (default) | max 10s | yes |
-| `squad receive <id> --wait` | Block until message or timeout | up to 3600s | no (debug only) |
+No blocking, no backgrounding, no competing consumers.
 
 ## Files Modified
 
 | File | Changes |
 |------|---------|
-| `src/main.rs` | Add `--poll` flag parsing, implement poll loop |
-| `src/store.rs` | Split `receive_messages` transaction |
-| `src/setup.rs` | Update slash command templates (both MD and TOML) |
-| `src/roles/worker.md` | Remove `--wait` from role instructions |
-| `src/roles/manager.md` | Remove `--wait` from role instructions |
-| `src/roles/inspector.md` | Remove `--wait` from role instructions |
-
-## Out of Scope
-
-- Removing `--wait` entirely (keep for backward compat / debug)
-- Changing `--wait` timeout default
-- PID-based locking
+| `src/store.rs` | Add `id <= max_id` fence to UPDATE |
+| `src/setup.rs` | Remove --wait from both slash command templates |
+| `src/roles/*.md` | Remove --wait from 3 role templates |
+| `src/main.rs` | Fix freeform role message + HELP_TEXT |
+| `README.md` | Remove --wait Pattern section, update examples |
+| `README.zh-CN.md` | Same as above |
