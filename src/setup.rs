@@ -59,22 +59,27 @@ You are joining a squad multi-agent collaboration team.
 
 2. Run `squad init` first (safe to run — it won't overwrite existing workspace).
 
-3. Run these commands in order:
+3. **Check for ID conflicts before joining:**
+   Run `squad agents` to see who is already online.
+   - If your intended ID (e.g. `worker`) is already taken by another agent, append a suffix: `worker-2`, `worker-3`, etc.
+   - If no conflict, use the original ID.
+
+4. Run these commands in order:
    a. `squad join <id> --role <role>` — register yourself and read the output
    b. If role instructions are printed (=== Role Instructions ===), follow them
    c. If no predefined template exists, **interpret the role using your own knowledge**. Adapt your behavior to what that role would do in a software team. Any role name works — you are not limited to predefined roles.
    d. `squad agents` — check who else is on the team
 
-4. Communicate using squad commands:
+5. Communicate using squad commands:
    - `squad send <your-id> <to> "<message>"` — send a message (use @all to broadcast)
    - `squad receive <your-id> --wait` — block until a message arrives
    - `squad agents` — see who is online
    - `squad pending` — check unread messages
    - `squad history` — view message history
 
-5. After completing any task, always run `squad receive <your-id> --wait` to wait for the next message.
+6. After completing any task, always run `squad receive <your-id> --wait` to wait for the next message.
 
-6. **IMPORTANT:** If `squad receive --wait` times out with "No new messages", immediately run it again. Keep retrying until a message arrives. Never stop waiting unless the user tells you to.
+7. **IMPORTANT:** If `squad receive --wait` times out with "No new messages", immediately run it again. Keep retrying until a message arrives. Never stop waiting unless the user tells you to.
 "#;
 
 /// TOML format for Gemini CLI (uses {{args}})
@@ -100,22 +105,27 @@ You are joining a squad multi-agent collaboration team.
 
 2. Run `squad init` first (safe to run — it won't overwrite existing workspace).
 
-3. Run these commands in order:
+3. **Check for ID conflicts before joining:**
+   Run `squad agents` to see who is already online.
+   - If your intended ID (e.g. `worker`) is already taken by another agent, append a suffix: `worker-2`, `worker-3`, etc.
+   - If no conflict, use the original ID.
+
+4. Run these commands in order:
    a. `squad join <id> --role <role>` — register yourself and read the output
    b. If role instructions are printed (=== Role Instructions ===), follow them
    c. If no predefined template exists, **interpret the role using your own knowledge**. Adapt your behavior to what that role would do in a software team. Any role name works — you are not limited to predefined roles.
    d. `squad agents` — check who else is on the team
 
-4. Communicate using squad commands:
+5. Communicate using squad commands:
    - `squad send <your-id> <to> "<message>"` — send a message (use @all to broadcast)
    - `squad receive <your-id> --wait` — block until a message arrives
    - `squad agents` — see who is online
    - `squad pending` — check unread messages
    - `squad history` — view message history
 
-5. After completing any task, always run `squad receive <your-id> --wait` to wait for the next message.
+6. After completing any task, always run `squad receive <your-id> --wait` to wait for the next message.
 
-6. **IMPORTANT:** If `squad receive --wait` times out with "No new messages", immediately run it again. Keep retrying until a message arrives. Never stop waiting unless the user tells you to.
+7. **IMPORTANT:** If `squad receive --wait` times out with "No new messages", immediately run it again. Keep retrying until a message arrives. Never stop waiting unless the user tells you to.
 """
 "#;
 
