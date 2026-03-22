@@ -157,6 +157,7 @@ fn cmd_join(id: &str, role: &str) -> Result<()> {
     let workspace = find_workspace()?;
     let store = open_store(&workspace)?;
     let (actual_id, token) = store.register_agent_unique(id, role)?;
+    store.touch_agent(&actual_id)?;
     squad::session::write_token(&sessions_dir(&workspace), &actual_id, &token)?;
     if actual_id != id {
         println!("ID '{id}' was taken. Joined as {actual_id} (role: {role}).");
@@ -195,8 +196,22 @@ fn cmd_agents() -> Result<()> {
     if agents.is_empty() {
         println!("No agents online.");
     } else {
+        let now = chrono::Utc::now().timestamp();
         for agent in &agents {
-            println!("  {} (role: {})", agent.id, agent.role);
+            let status = match agent.last_seen {
+                Some(ts) => {
+                    let ago = now - ts;
+                    if ago < 60 {
+                        format!("active ({}s ago)", ago)
+                    } else if ago < 600 {
+                        format!("idle ({}m ago)", ago / 60)
+                    } else {
+                        format!("stale ({}m ago)", ago / 60)
+                    }
+                }
+                None => "unknown".to_string(),
+            };
+            println!("  {} (role: {}) — {}", agent.id, agent.role, status);
         }
     }
     Ok(())
@@ -206,6 +221,7 @@ fn cmd_send(from: &str, to: &str, content: &str) -> Result<()> {
     let workspace = find_workspace()?;
     let store = open_store(&workspace)?;
     check_session(&workspace, &store, from)?;
+    store.touch_agent(from)?;
     if to == "@all" {
         let recipients = store.broadcast_message(from, content)?;
         println!(
@@ -226,15 +242,23 @@ fn cmd_receive(agent: &str, wait: bool, timeout_secs: u64) -> Result<()> {
     // Validate session at entry (catches displacement immediately)
     let store = open_store(&workspace)?;
     check_session(&workspace, &store, agent)?;
+    store.touch_agent(agent)?;
 
     if wait {
         let deadline =
             std::time::Instant::now() + std::time::Duration::from_secs(timeout_secs);
+        let mut last_heartbeat = std::time::Instant::now();
         loop {
             let store = open_store(&workspace)?;
 
             // Re-check for displacement on each poll (~500ms)
             check_session(&workspace, &store, agent)?;
+
+            // Heartbeat: update last_seen every 30s so other agents know we're alive
+            if last_heartbeat.elapsed() >= std::time::Duration::from_secs(30) {
+                store.touch_agent(agent)?;
+                last_heartbeat = std::time::Instant::now();
+            }
 
             if store.has_unread_messages(agent)? {
                 let messages = store.receive_messages(agent)?;

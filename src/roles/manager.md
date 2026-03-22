@@ -18,3 +18,4 @@ You are the project manager (manager).
 - After sending tasks, run `squad receive manager --wait` to wait for responses
 - Do NOT background or interrupt this command — let it run until it returns
 - If it times out with no messages, run it again
+- Periodically run `squad agents` to check team status. If an agent shows [stale], use `squad leave <id>` to remove it and reassign its task to another agent

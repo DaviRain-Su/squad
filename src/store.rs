@@ -8,6 +8,7 @@ pub struct AgentRecord {
     pub id: String,
     pub role: String,
     pub joined_at: i64,
+    pub last_seen: Option<i64>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -48,9 +49,12 @@ impl Store {
                 read INTEGER NOT NULL DEFAULT 0
             );",
         )?;
-        // Migration: add session_token column if missing (existing DBs)
+        // Migrations: add columns if missing (existing DBs)
         let _ = conn.execute_batch(
             "ALTER TABLE agents ADD COLUMN session_token TEXT;"
+        );
+        let _ = conn.execute_batch(
+            "ALTER TABLE agents ADD COLUMN last_seen INTEGER;"
         );
         Ok(Self { conn })
     }
@@ -102,17 +106,28 @@ impl Store {
     pub fn list_agents(&self) -> Result<Vec<AgentRecord>> {
         let mut stmt = self
             .conn
-            .prepare("SELECT id, role, joined_at FROM agents ORDER BY joined_at")?;
+            .prepare("SELECT id, role, joined_at, last_seen FROM agents ORDER BY joined_at")?;
         let agents = stmt
             .query_map([], |row| {
                 Ok(AgentRecord {
                     id: row.get(0)?,
                     role: row.get(1)?,
                     joined_at: row.get(2)?,
+                    last_seen: row.get(3)?,
                 })
             })?
             .collect::<Result<Vec<_>, _>>()?;
         Ok(agents)
+    }
+
+    /// Update last_seen timestamp for an agent.
+    pub fn touch_agent(&self, id: &str) -> Result<()> {
+        let now = chrono::Utc::now().timestamp();
+        self.conn.execute(
+            "UPDATE agents SET last_seen = ?1 WHERE id = ?2",
+            rusqlite::params![now, id],
+        )?;
+        Ok(())
     }
 
     pub fn agent_exists(&self, id: &str) -> Result<bool> {
