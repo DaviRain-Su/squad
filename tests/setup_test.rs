@@ -1,4 +1,4 @@
-use squad::setup::{PLATFORMS, SQUAD_MD_CONTENT, SQUAD_TOML_CONTENT, install_command};
+use squad::setup::{install_command, PLATFORMS, SQUAD_MD_CONTENT, SQUAD_TOML_CONTENT};
 use tempfile::TempDir;
 
 #[test]
@@ -89,4 +89,12 @@ fn test_toml_content_has_two_phase_structure() {
     assert!(SQUAD_TOML_CONTENT.contains("Phase 1"));
     assert!(SQUAD_TOML_CONTENT.contains("Phase 2"));
     assert!(SQUAD_TOML_CONTENT.contains("Work Loop"));
+}
+
+#[test]
+fn test_setup_templates_do_not_auto_clean_without_user_confirmation() {
+    assert!(!SQUAD_MD_CONTENT.contains("run `squad clean` then `squad init`"));
+    assert!(!SQUAD_TOML_CONTENT.contains("run `squad clean` then `squad init`"));
+    assert!(SQUAD_MD_CONTENT.contains("ask the user"));
+    assert!(SQUAD_TOML_CONTENT.contains("ask the user"));
 }

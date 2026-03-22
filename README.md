@@ -84,7 +84,7 @@ Multiple agents with the same role get unique IDs automatically (`worker`, `work
 
 | Command | Description |
 |---------|-------------|
-| `squad init` | Initialize workspace (creates `.squad/` directory) |
+| `squad init` | Initialize workspace, create `.squad/`, add `.squad/` to `.gitignore`, and append squad guidance to `CLAUDE.md`, `AGENTS.md`, and `GEMINI.md` if missing |
 | `squad join <id> [--role <role>]` | Join as agent (auto-suffixes if ID is taken) |
 | `squad leave <id>` | Remove agent |
 | `squad agents` | List online agents |
@@ -119,6 +119,8 @@ Supported platforms:
 | OpenCode | `opencode` | `~/.config/opencode/commands/squad.md` |
 
 Once installed, use `/squad <role>` in any project where `squad init` has been run.
+
+`squad init` does more than create `.squad/`: it also appends `.squad/` to `.gitignore` and adds a short squad collaboration section to `CLAUDE.md`, `AGENTS.md`, and `GEMINI.md` when those files do not already contain one.
 
 ## How It Works
 

@@ -8,10 +8,30 @@ fn test_init_creates_squad_directory() {
     assert!(tmp.path().join(".squad").exists());
     assert!(tmp.path().join(".squad").join("roles").exists());
     assert!(tmp.path().join(".squad").join("teams").exists());
-    assert!(tmp.path().join(".squad").join("roles").join("manager.md").exists());
-    assert!(tmp.path().join(".squad").join("roles").join("worker.md").exists());
-    assert!(tmp.path().join(".squad").join("roles").join("inspector.md").exists());
-    assert!(tmp.path().join(".squad").join("teams").join("dev.yaml").exists());
+    assert!(tmp
+        .path()
+        .join(".squad")
+        .join("roles")
+        .join("manager.md")
+        .exists());
+    assert!(tmp
+        .path()
+        .join(".squad")
+        .join("roles")
+        .join("worker.md")
+        .exists());
+    assert!(tmp
+        .path()
+        .join(".squad")
+        .join("roles")
+        .join("inspector.md")
+        .exists());
+    assert!(tmp
+        .path()
+        .join(".squad")
+        .join("teams")
+        .join("dev.yaml")
+        .exists());
 }
 
 #[test]
@@ -47,8 +67,14 @@ fn test_init_creates_agent_config_files() {
         let path = tmp.path().join(filename);
         assert!(path.exists(), "{filename} should exist");
         let content = std::fs::read_to_string(&path).unwrap();
-        assert!(content.contains("Squad Collaboration"), "{filename} should contain squad section");
-        assert!(content.contains("squad help"), "{filename} should point to squad help");
+        assert!(
+            content.contains("Squad Collaboration"),
+            "{filename} should contain squad section"
+        );
+        assert!(
+            content.contains("squad help"),
+            "{filename} should point to squad help"
+        );
     }
 }
 

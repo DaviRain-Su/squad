@@ -49,8 +49,14 @@ fn test_join_with_role_flag() {
 fn test_send_and_receive() {
     let tmp = TempDir::new().unwrap();
     squad(tmp.path()).arg("init").assert().success();
-    squad(tmp.path()).args(["join", "manager"]).assert().success();
-    squad(tmp.path()).args(["join", "worker"]).assert().success();
+    squad(tmp.path())
+        .args(["join", "manager"])
+        .assert()
+        .success();
+    squad(tmp.path())
+        .args(["join", "worker"])
+        .assert()
+        .success();
 
     squad(tmp.path())
         .args(["send", "manager", "worker", "implement auth module"])
@@ -69,7 +75,10 @@ fn test_send_and_receive() {
 fn test_send_broadcast() {
     let tmp = TempDir::new().unwrap();
     squad(tmp.path()).arg("init").assert().success();
-    squad(tmp.path()).args(["join", "manager"]).assert().success();
+    squad(tmp.path())
+        .args(["join", "manager"])
+        .assert()
+        .success();
     squad(tmp.path())
         .args(["join", "worker-1"])
         .assert()
@@ -96,7 +105,10 @@ fn test_send_broadcast() {
 fn test_send_to_nonexistent() {
     let tmp = TempDir::new().unwrap();
     squad(tmp.path()).arg("init").assert().success();
-    squad(tmp.path()).args(["join", "manager"]).assert().success();
+    squad(tmp.path())
+        .args(["join", "manager"])
+        .assert()
+        .success();
 
     squad(tmp.path())
         .args(["send", "manager", "nobody", "hello"])
@@ -106,10 +118,29 @@ fn test_send_to_nonexistent() {
 }
 
 #[test]
+fn test_send_from_nonexistent_fails() {
+    let tmp = TempDir::new().unwrap();
+    squad(tmp.path()).arg("init").assert().success();
+    squad(tmp.path())
+        .args(["join", "worker"])
+        .assert()
+        .success();
+
+    squad(tmp.path())
+        .args(["send", "ghost", "worker", "hello"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("ghost does not exist"));
+}
+
+#[test]
 fn test_leave() {
     let tmp = TempDir::new().unwrap();
     squad(tmp.path()).arg("init").assert().success();
-    squad(tmp.path()).args(["join", "manager"]).assert().success();
+    squad(tmp.path())
+        .args(["join", "manager"])
+        .assert()
+        .success();
     squad(tmp.path())
         .args(["leave", "manager"])
         .assert()
@@ -135,6 +166,19 @@ fn test_setup_list() {
 }
 
 #[test]
+fn test_help_describes_wait_as_normal_flow() {
+    let tmp = TempDir::new().unwrap();
+    squad(tmp.path())
+        .arg("help")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(
+            "Check inbox (--wait blocks until message arrives)",
+        ))
+        .stdout(predicate::str::contains("debug only").not());
+}
+
+#[test]
 fn test_join_freeform_role_succeeds() {
     let tmp = TempDir::new().unwrap();
     squad(tmp.path()).arg("init").assert().success();
@@ -151,8 +195,14 @@ fn test_join_freeform_role_succeeds() {
 fn test_history() {
     let tmp = TempDir::new().unwrap();
     squad(tmp.path()).arg("init").assert().success();
-    squad(tmp.path()).args(["join", "manager"]).assert().success();
-    squad(tmp.path()).args(["join", "worker"]).assert().success();
+    squad(tmp.path())
+        .args(["join", "manager"])
+        .assert()
+        .success();
+    squad(tmp.path())
+        .args(["join", "worker"])
+        .assert()
+        .success();
 
     squad(tmp.path())
         .args(["send", "manager", "worker", "task 1"])
@@ -189,8 +239,14 @@ fn test_join_creates_session_file() {
 fn test_leave_deletes_session_file() {
     let tmp = TempDir::new().unwrap();
     squad(tmp.path()).arg("init").assert().success();
-    squad(tmp.path()).args(["join", "worker"]).assert().success();
-    squad(tmp.path()).args(["leave", "worker"]).assert().success();
+    squad(tmp.path())
+        .args(["join", "worker"])
+        .assert()
+        .success();
+    squad(tmp.path())
+        .args(["leave", "worker"])
+        .assert()
+        .success();
     let session_path = tmp.path().join(".squad").join("sessions").join("worker");
     assert!(!session_path.exists());
 }

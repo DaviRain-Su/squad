@@ -21,8 +21,12 @@ pub fn load_role(workspace: &Path, role: &str) -> Result<String> {
         return std::fs::read_to_string(&custom_path)
             .with_context(|| format!("failed to read role: {}", custom_path.display()));
     }
-    default_role_prompt(role)
-        .with_context(|| format!("unknown role: {role}. Available: {}", BUILTIN_ROLES.join(", ")))
+    default_role_prompt(role).with_context(|| {
+        format!(
+            "unknown role: {role}. Available: {}",
+            BUILTIN_ROLES.join(", ")
+        )
+    })
 }
 
 pub fn list_roles(workspace: &Path) -> Vec<String> {

@@ -35,7 +35,12 @@ fn test_full_collaboration_flow() {
 
     // 2. Manager sends task to worker
     squad(tmp.path())
-        .args(["send", "manager", "worker", "implement auth module with JWT"])
+        .args([
+            "send",
+            "manager",
+            "worker",
+            "implement auth module with JWT",
+        ])
         .assert()
         .success();
 
@@ -47,7 +52,12 @@ fn test_full_collaboration_flow() {
         .stdout(predicate::str::contains("implement auth module with JWT"));
 
     squad(tmp.path())
-        .args(["send", "worker", "manager", "done: added JWT auth in src/auth.rs"])
+        .args([
+            "send",
+            "worker",
+            "manager",
+            "done: added JWT auth in src/auth.rs",
+        ])
         .assert()
         .success();
 
@@ -179,7 +189,10 @@ fn test_full_collaboration_flow() {
 fn test_broadcast_to_workers() {
     let tmp = setup_workspace();
 
-    squad(tmp.path()).args(["join", "manager"]).assert().success();
+    squad(tmp.path())
+        .args(["join", "manager"])
+        .assert()
+        .success();
     squad(tmp.path())
         .args(["join", "worker-1", "--role", "worker"])
         .assert()
@@ -194,7 +207,12 @@ fn test_broadcast_to_workers() {
         .success();
 
     squad(tmp.path())
-        .args(["send", "manager", "@all", "API contract updated, rebase your work"])
+        .args([
+            "send",
+            "manager",
+            "@all",
+            "API contract updated, rebase your work",
+        ])
         .assert()
         .success()
         .stdout(predicate::str::contains("Broadcast to 3 agents"));
@@ -214,8 +232,14 @@ fn test_broadcast_to_workers() {
 fn test_send_to_left_agent_fails() {
     let tmp = setup_workspace();
 
-    squad(tmp.path()).args(["join", "manager"]).assert().success();
-    squad(tmp.path()).args(["join", "worker"]).assert().success();
+    squad(tmp.path())
+        .args(["join", "manager"])
+        .assert()
+        .success();
+    squad(tmp.path())
+        .args(["join", "worker"])
+        .assert()
+        .success();
     squad(tmp.path())
         .args(["leave", "worker"])
         .assert()
@@ -228,12 +252,49 @@ fn test_send_to_left_agent_fails() {
         .stderr(predicate::str::contains("does not exist"));
 }
 
+#[test]
+fn test_rejoin_same_id_does_not_receive_old_unread_messages() {
+    let tmp = setup_workspace();
+
+    squad(tmp.path())
+        .args(["join", "manager"])
+        .assert()
+        .success();
+    squad(tmp.path())
+        .args(["join", "worker"])
+        .assert()
+        .success();
+
+    squad(tmp.path())
+        .args(["send", "manager", "worker", "task-before-leave"])
+        .assert()
+        .success();
+
+    squad(tmp.path())
+        .args(["leave", "worker"])
+        .assert()
+        .success();
+    squad(tmp.path())
+        .args(["join", "worker"])
+        .assert()
+        .success();
+
+    squad(tmp.path())
+        .args(["receive", "worker"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("No new messages."));
+}
+
 /// Clean command removes state
 #[test]
 fn test_clean_command() {
     let tmp = setup_workspace();
 
-    squad(tmp.path()).args(["join", "manager"]).assert().success();
+    squad(tmp.path())
+        .args(["join", "manager"])
+        .assert()
+        .success();
     squad(tmp.path())
         .args(["send", "manager", "manager", "test"])
         .assert()
@@ -254,7 +315,10 @@ fn test_clean_command() {
 fn test_multiple_workers_same_role() {
     let tmp = setup_workspace();
 
-    squad(tmp.path()).args(["join", "manager"]).assert().success();
+    squad(tmp.path())
+        .args(["join", "manager"])
+        .assert()
+        .success();
     squad(tmp.path())
         .args(["join", "worker-1", "--role", "worker"])
         .assert()
@@ -327,11 +391,20 @@ fn test_second_join_gets_auto_suffix() {
 fn test_three_agents_same_base_id() {
     let tmp = setup_workspace();
 
-    squad(tmp.path()).args(["join", "member"]).assert().success()
+    squad(tmp.path())
+        .args(["join", "member"])
+        .assert()
+        .success()
         .stdout(predicate::str::contains("Joined as member"));
-    squad(tmp.path()).args(["join", "member"]).assert().success()
+    squad(tmp.path())
+        .args(["join", "member"])
+        .assert()
+        .success()
         .stdout(predicate::str::contains("Joined as member-2"));
-    squad(tmp.path()).args(["join", "member"]).assert().success()
+    squad(tmp.path())
+        .args(["join", "member"])
+        .assert()
+        .success()
         .stdout(predicate::str::contains("Joined as member-3"));
 
     let output = squad(tmp.path()).arg("agents").output().unwrap();
@@ -345,8 +418,14 @@ fn test_three_agents_same_base_id() {
 fn test_pending_overview() {
     let tmp = setup_workspace();
 
-    squad(tmp.path()).args(["join", "manager"]).assert().success();
-    squad(tmp.path()).args(["join", "worker"]).assert().success();
+    squad(tmp.path())
+        .args(["join", "manager"])
+        .assert()
+        .success();
+    squad(tmp.path())
+        .args(["join", "worker"])
+        .assert()
+        .success();
 
     squad(tmp.path())
         .args(["send", "manager", "worker", "task alpha"])

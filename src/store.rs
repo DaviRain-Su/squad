@@ -50,12 +50,8 @@ impl Store {
             );",
         )?;
         // Migrations: add columns if missing (existing DBs)
-        let _ = conn.execute_batch(
-            "ALTER TABLE agents ADD COLUMN session_token TEXT;"
-        );
-        let _ = conn.execute_batch(
-            "ALTER TABLE agents ADD COLUMN last_seen INTEGER;"
-        );
+        let _ = conn.execute_batch("ALTER TABLE agents ADD COLUMN session_token TEXT;");
+        let _ = conn.execute_batch("ALTER TABLE agents ADD COLUMN last_seen INTEGER;");
         Ok(Self { conn })
     }
 
@@ -71,7 +67,11 @@ impl Store {
 
     /// Register with automatic ID suffixing if the requested ID is taken.
     /// Returns (actual_id, session_token).
-    pub fn register_agent_unique(&self, requested_id: &str, role: &str) -> Result<(String, String)> {
+    pub fn register_agent_unique(
+        &self,
+        requested_id: &str,
+        role: &str,
+    ) -> Result<(String, String)> {
         let now = chrono::Utc::now().timestamp();
         let token = uuid::Uuid::new_v4().to_string();
         let candidates = std::iter::once(requested_id.to_string())
@@ -89,15 +89,22 @@ impl Store {
     }
 
     pub fn get_session_token(&self, id: &str) -> Result<Option<String>> {
-        let token: Option<String> = self.conn.query_row(
-            "SELECT session_token FROM agents WHERE id = ?1",
-            [id],
-            |row| row.get(0),
-        ).optional()?;
+        let token: Option<String> = self
+            .conn
+            .query_row(
+                "SELECT session_token FROM agents WHERE id = ?1",
+                [id],
+                |row| row.get(0),
+            )
+            .optional()?;
         Ok(token)
     }
 
     pub fn unregister_agent(&self, id: &str) -> Result<()> {
+        self.conn.execute(
+            "DELETE FROM messages WHERE to_agent = ?1 AND read = 0",
+            [id],
+        )?;
         self.conn
             .execute("DELETE FROM agents WHERE id = ?1", [id])?;
         Ok(())
@@ -159,10 +166,7 @@ impl Store {
     pub fn send_message_checked(&self, from: &str, to: &str, content: &str) -> Result<()> {
         if !self.agent_exists(to)? {
             let names = self.agent_names()?;
-            anyhow::bail!(
-                "{to} does not exist. Online agents: {}",
-                names.join(", ")
-            );
+            anyhow::bail!("{to} does not exist. Online agents: {}", names.join(", "));
         }
         self.send_message(from, to, content)
     }
@@ -258,7 +262,8 @@ impl Store {
                     "SELECT id, from_agent, to_agent, content, created_at, read
                      FROM messages WHERE from_agent = ?1 OR to_agent = ?1 ORDER BY created_at",
                 )?;
-                let rows = stmt.query_map([id], map_row)?
+                let rows = stmt
+                    .query_map([id], map_row)?
                     .collect::<Result<Vec<_>, _>>()?;
                 rows
             }
@@ -267,7 +272,8 @@ impl Store {
                     "SELECT id, from_agent, to_agent, content, created_at, read
                      FROM messages ORDER BY created_at",
                 )?;
-                let rows = stmt.query_map([], map_row)?
+                let rows = stmt
+                    .query_map([], map_row)?
                     .collect::<Result<Vec<_>, _>>()?;
                 rows
             }

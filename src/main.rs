@@ -17,10 +17,7 @@ fn main() -> Result<()> {
             let mut i = 0;
             while i < extra.len() {
                 if extra[i] == "--role" {
-                    role = extra
-                        .get(i + 1)
-                        .cloned()
-                        .unwrap_or_else(|| id.clone());
+                    role = extra.get(i + 1).cloned().unwrap_or_else(|| id.clone());
                     i += 2;
                 } else {
                     i += 1;
@@ -121,6 +118,15 @@ fn open_store(workspace: &Path) -> Result<squad::store::Store> {
     squad::store::Store::open(&db_path)
 }
 
+fn ensure_agent_exists(store: &squad::store::Store, id: &str) -> Result<()> {
+    if store.agent_exists(id)? {
+        return Ok(());
+    }
+    let agents = store.list_agents()?;
+    let names = agents.into_iter().map(|agent| agent.id).collect::<Vec<_>>();
+    bail!("{id} does not exist. Online agents: {}", names.join(", "));
+}
+
 fn sessions_dir(workspace: &Path) -> PathBuf {
     workspace.join(".squad").join("sessions")
 }
@@ -139,7 +145,10 @@ fn print_messages(messages: &[squad::store::MessageRecord], receiver: Option<&st
     for msg in messages {
         println!("[from {}] {}", msg.from_agent, msg.content);
         if let Some(id) = receiver {
-            println!("  → Reply: squad send {id} {} \"<your response>\"", msg.from_agent);
+            println!(
+                "  → Reply: squad send {id} {} \"<your response>\"",
+                msg.from_agent
+            );
         }
     }
 }
@@ -220,6 +229,7 @@ fn cmd_agents() -> Result<()> {
 fn cmd_send(from: &str, to: &str, content: &str) -> Result<()> {
     let workspace = find_workspace()?;
     let store = open_store(&workspace)?;
+    ensure_agent_exists(&store, from)?;
     check_session(&workspace, &store, from)?;
     store.touch_agent(from)?;
     if to == "@all" {
@@ -245,8 +255,7 @@ fn cmd_receive(agent: &str, wait: bool, timeout_secs: u64) -> Result<()> {
     store.touch_agent(agent)?;
 
     if wait {
-        let deadline =
-            std::time::Instant::now() + std::time::Duration::from_secs(timeout_secs);
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(timeout_secs);
         let mut last_heartbeat = std::time::Instant::now();
         loop {
             let store = open_store(&workspace)?;
@@ -434,7 +443,7 @@ COMMANDS
   squad leave <id>                           Remove agent
   squad agents                               List online agents
   squad send <from> <to> <message>           Send message (use @all to broadcast)
-  squad receive <id> [--wait] [--timeout N]  Check inbox (--wait blocks, for debug only)
+  squad receive <id> [--wait] [--timeout N]  Check inbox (--wait blocks until message arrives)
   squad pending                              Show all unread messages
   squad history [agent]                      Show all messages (including read)
   squad roles                                List available roles

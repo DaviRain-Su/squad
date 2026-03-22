@@ -35,8 +35,12 @@ fn test_send_and_receive_messages() {
     store.register_agent("manager", "manager").unwrap();
     store.register_agent("worker", "worker").unwrap();
 
-    store.send_message("manager", "worker", "implement auth module").unwrap();
-    store.send_message("manager", "worker", "also add tests").unwrap();
+    store
+        .send_message("manager", "worker", "implement auth module")
+        .unwrap();
+    store
+        .send_message("manager", "worker", "also add tests")
+        .unwrap();
 
     let messages = store.receive_messages("worker").unwrap();
     assert_eq!(messages.len(), 2);
@@ -67,7 +71,9 @@ fn test_broadcast_message() {
     store.register_agent("worker-1", "worker").unwrap();
     store.register_agent("worker-2", "worker").unwrap();
 
-    let recipients = store.broadcast_message("manager", "code interface changed").unwrap();
+    let recipients = store
+        .broadcast_message("manager", "code interface changed")
+        .unwrap();
     assert_eq!(recipients.len(), 2);
     assert!(recipients.contains(&"worker-1".to_string()));
     assert!(recipients.contains(&"worker-2".to_string()));

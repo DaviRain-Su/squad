@@ -61,7 +61,7 @@ You are joining a squad multi-agent collaboration team.
 
 3. **Clean up stale agents from previous sessions:**
    Run `squad agents` and check the output.
-   - If ALL agents show "stale" (no active agents), run `squad clean` then `squad init` to start fresh.
+   - If ALL agents show "stale" (no active agents), tell the user stale squad state was detected and ask the user whether they want to reset squad state with `squad clean` followed by `squad init`. Do NOT clean automatically.
    - If some agents are active (a team is already running), skip cleanup and proceed.
 
 4. Run `squad join <id> --role <role>` to register yourself.
@@ -117,7 +117,7 @@ You are joining a squad multi-agent collaboration team.
 
 3. **Clean up stale agents from previous sessions:**
    Run `squad agents` and check the output.
-   - If ALL agents show "stale" (no active agents), run `squad clean` then `squad init` to start fresh.
+   - If ALL agents show "stale" (no active agents), tell the user stale squad state was detected and ask the user whether they want to reset squad state with `squad clean` followed by `squad init`. Do NOT clean automatically.
    - If some agents are active (a team is already running), skip cleanup and proceed.
 
 4. Run `squad join <id> --role <role>` to register yourself.
@@ -160,7 +160,10 @@ pub fn is_installed(binary: &str) -> bool {
 
 /// Detect which platforms are installed.
 pub fn detect_platforms() -> Vec<&'static Platform> {
-    PLATFORMS.iter().filter(|p| is_installed(p.binary)).collect()
+    PLATFORMS
+        .iter()
+        .filter(|p| is_installed(p.binary))
+        .collect()
 }
 
 /// Get the full path for a platform's command file.
@@ -175,8 +178,7 @@ pub fn install_command(path: &Path, content: &str) -> Result<()> {
         std::fs::create_dir_all(parent)
             .with_context(|| format!("failed to create {}", parent.display()))?;
     }
-    std::fs::write(path, content)
-        .with_context(|| format!("failed to write {}", path.display()))?;
+    std::fs::write(path, content).with_context(|| format!("failed to write {}", path.display()))?;
     Ok(())
 }
 

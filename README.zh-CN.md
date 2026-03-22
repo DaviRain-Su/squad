@@ -84,7 +84,7 @@ squad init
 
 | 命令 | 说明 |
 |------|------|
-| `squad init` | 初始化工作区（创建 `.squad/` 目录） |
+| `squad init` | 初始化工作区，创建 `.squad/`，将 `.squad/` 加入 `.gitignore`，并在缺失时向 `CLAUDE.md`、`AGENTS.md`、`GEMINI.md` 追加 squad 说明 |
 | `squad join <id> [--role <role>]` | 以 Agent 身份加入（ID 冲突时自动添加后缀） |
 | `squad leave <id>` | 移除 Agent |
 | `squad agents` | 列出在线 Agent |
@@ -115,6 +115,8 @@ squad setup --list    # 查看支持的平台
 | OpenCode | `opencode` | `~/.config/opencode/commands/squad.md` |
 
 安装后，在任何执行过 `squad init` 的项目中使用 `/squad <角色>` 即可。
+
+`squad init` 不只是创建 `.squad/`：它还会把 `.squad/` 追加到 `.gitignore`，并在 `CLAUDE.md`、`AGENTS.md`、`GEMINI.md` 尚未包含相关段落时，补上一段简短的 squad 协作说明。
 
 ## 工作原理
 
