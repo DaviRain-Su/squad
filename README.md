@@ -29,7 +29,7 @@ Or manually:
 ```bash
 squad join manager --role manager
 squad send manager worker "implement auth module with JWT"
-squad receive worker --wait
+squad receive worker
 ```
 
 ## Commands
@@ -41,7 +41,7 @@ squad receive worker --wait
 | `squad leave <id>` | Remove agent |
 | `squad agents` | List online agents |
 | `squad send <from> <to> <message>` | Send message (`@all` to broadcast) |
-| `squad receive <id> [--wait] [--timeout N]` | Check inbox (`--wait` blocks until message, default 120s) |
+| `squad receive <id> [--wait]` | Check inbox (`--wait` blocks, for debug only) |
 | `squad pending` | Show all unread messages |
 | `squad history [agent]` | Show all messages including read |
 | `squad roles` | List available roles |
@@ -82,29 +82,28 @@ Terminal 1 (manager)          Terminal 2 (worker)          Terminal 3 (inspector
 │ squad join manager   │      │ squad join worker    │      │ squad join inspector │
 │                      │      │                      │      │                      │
 │ squad send manager   │─────>│ squad receive worker │      │                      │
-│   worker "task..."   │      │   --wait             │      │                      │
+│   worker "task..."   │      │                      │      │                      │
 │                      │      │                      │      │                      │
 │ squad receive manager│<─────│ squad send worker    │      │                      │
-│   --wait             │      │   manager "done..."  │      │                      │
+│                      │      │   manager "done..."  │      │                      │
 │                      │      │                      │      │                      │
 │ squad send manager   │─────────────────────────────────>│ squad receive         │
-│   inspector "review" │      │                      │      │   inspector --wait   │
+│   inspector "review" │      │                      │      │   inspector          │
 └─────────────────────┘      └─────────────────────┘      └─────────────────────┘
 ```
 
 All messages flow through SQLite — no daemon, no sockets, no background processes.
 
-### The `--wait` Pattern
+### Checking for Messages
 
-When an agent finishes its work, it calls `squad receive <id> --wait` to block until the next message arrives. This creates a natural event loop:
+After completing work, agents check for new messages:
 
 ```
 Agent completes task
   → squad send <id> manager "done: summary..."
-  → squad receive <id> --wait              ← blocks here
-  → receives new task or feedback
-  → works on it
-  → repeat
+  → squad receive <id>                     ← check for next task
+  → if no messages, continue other work
+  → check again when ready
 ```
 
 ## Role Templates

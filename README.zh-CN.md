@@ -39,8 +39,8 @@ squad join inspector --role inspector
 # 管理者分配任务
 squad send manager worker "实现 JWT 认证模块"
 
-# 工作者检查收件箱（阻塞等待消息到达）
-squad receive worker --wait
+# 工作者检查收件箱
+squad receive worker
 
 # 工作者完成后汇报
 squad send worker manager "完成：已在 src/auth.rs 添加 JWT 认证"
@@ -61,7 +61,7 @@ squad send inspector manager "PASS: 认证模块没有问题"
 | `squad leave <id>` | 移除 Agent |
 | `squad agents` | 列出在线 Agent |
 | `squad send <from> <to> <message>` | 发送消息（`@all` 广播给所有人） |
-| `squad receive <id> [--wait] [--timeout N]` | 检查收件箱（`--wait` 阻塞等待，默认 120 秒） |
+| `squad receive <id> [--wait]` | 检查收件箱（`--wait` 仅用于调试） |
 | `squad pending` | 查看所有未读消息 |
 | `squad history [agent]` | 查看所有消息历史（含已读） |
 | `squad roles` | 列出可用角色 |
@@ -92,17 +92,16 @@ squad setup --list    # 查看支持的平台
 
 Agent 通过共享的 SQLite 数据库（`.squad/messages.db`）通信。每个 Agent 在自己的终端中运行，使用 CLI 命令收发消息。
 
-### `--wait` 模式
+### 消息检查
 
-Agent 完成任务后，调用 `squad receive <id> --wait` 阻塞等待下一条消息：
+Agent 完成任务后，检查新消息：
 
 ```
 Agent 完成任务
   → squad send <id> manager "完成：摘要..."
-  → squad receive <id> --wait              ← 在此阻塞
-  → 收到新任务或反馈
-  → 执行
-  → 循环
+  → squad receive <id>                     ← 检查新任务
+  → 没有消息则继续其他工作
+  → 稍后再次检查
 ```
 
 ## 角色模板
