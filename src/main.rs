@@ -125,6 +125,16 @@ fn sessions_dir(workspace: &Path) -> PathBuf {
     workspace.join(".squad").join("sessions")
 }
 
+/// Check if this agent's session is still valid. Returns Ok(()) if valid or if
+/// no session tracking exists (backward compat). Errors with "Session replaced" if displaced.
+fn check_session(workspace: &Path, store: &squad::store::Store, agent_id: &str) -> Result<()> {
+    let sessions = sessions_dir(workspace);
+    if let Some(db_token) = store.get_session_token(agent_id)? {
+        squad::session::validate(&sessions, agent_id, &db_token)?;
+    }
+    Ok(())
+}
+
 fn print_messages(messages: &[squad::store::MessageRecord], receiver: Option<&str>) {
     for msg in messages {
         println!("[from {}] {}", msg.from_agent, msg.content);
@@ -191,6 +201,7 @@ fn cmd_agents() -> Result<()> {
 fn cmd_send(from: &str, to: &str, content: &str) -> Result<()> {
     let workspace = find_workspace()?;
     let store = open_store(&workspace)?;
+    check_session(&workspace, &store, from)?;
     if to == "@all" {
         let recipients = store.broadcast_message(from, content)?;
         println!(
@@ -208,11 +219,19 @@ fn cmd_send(from: &str, to: &str, content: &str) -> Result<()> {
 fn cmd_receive(agent: &str, wait: bool, timeout_secs: u64) -> Result<()> {
     let workspace = find_workspace()?;
 
+    // Validate session at entry (catches displacement immediately)
+    let store = open_store(&workspace)?;
+    check_session(&workspace, &store, agent)?;
+
     if wait {
         let deadline =
             std::time::Instant::now() + std::time::Duration::from_secs(timeout_secs);
         loop {
             let store = open_store(&workspace)?;
+
+            // Re-check for displacement on each poll (~500ms)
+            check_session(&workspace, &store, agent)?;
+
             if store.has_unread_messages(agent)? {
                 let messages = store.receive_messages(agent)?;
                 if !messages.is_empty() {
@@ -227,7 +246,6 @@ fn cmd_receive(agent: &str, wait: bool, timeout_secs: u64) -> Result<()> {
             std::thread::sleep(std::time::Duration::from_millis(500));
         }
     } else {
-        let store = open_store(&workspace)?;
         let messages = store.receive_messages(agent)?;
         if messages.is_empty() {
             println!("No new messages.");

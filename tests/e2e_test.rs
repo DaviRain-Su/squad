@@ -289,6 +289,68 @@ fn test_multiple_workers_same_role() {
         .stdout(predicate::str::contains("implement signup"));
 }
 
+/// Second join displaces first terminal's session
+#[test]
+fn test_second_join_displaces_first() {
+    let tmp = setup_workspace();
+
+    // First terminal joins as worker
+    squad(tmp.path())
+        .args(["join", "worker", "--role", "worker"])
+        .assert()
+        .success();
+
+    // Save first terminal's session token
+    let token_path = tmp.path().join(".squad").join("sessions").join("worker");
+    let first_token = std::fs::read_to_string(&token_path).unwrap();
+
+    // Second terminal joins as worker (overwrites)
+    squad(tmp.path())
+        .args(["join", "worker", "--role", "worker"])
+        .assert()
+        .success();
+
+    // Token file should have changed
+    let second_token = std::fs::read_to_string(&token_path).unwrap();
+    assert_ne!(first_token, second_token);
+
+    // Simulate first terminal: restore its old token file.
+    // In real usage, Terminal 1's file stays unchanged — it's the DB that gets
+    // overwritten by Terminal 2's join. But since both terminals share the same
+    // filesystem path in this test, Terminal 2's join also overwrites the file.
+    // We restore it manually to simulate Terminal 1's perspective.
+    std::fs::write(&token_path, &first_token).unwrap();
+    squad(tmp.path())
+        .args(["send", "worker", "worker", "hello"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("Session replaced"));
+}
+
+/// Receive detects displacement
+#[test]
+fn test_receive_detects_displacement() {
+    let tmp = setup_workspace();
+
+    // Join, save token, then overwrite by re-joining
+    squad(tmp.path()).args(["join", "worker"]).assert().success();
+    let token_path = tmp.path().join(".squad").join("sessions").join("worker");
+    let first_token = std::fs::read_to_string(&token_path).unwrap();
+
+    squad(tmp.path()).args(["join", "worker"]).assert().success();
+
+    // Restore first token to simulate first terminal's perspective.
+    // (See comment in test_second_join_displaces_first for explanation.)
+    std::fs::write(&token_path, &first_token).unwrap();
+
+    // Receive should detect displacement
+    squad(tmp.path())
+        .args(["receive", "worker"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("Session replaced"));
+}
+
 /// Pending shows unread messages overview
 #[test]
 fn test_pending_overview() {
