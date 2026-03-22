@@ -164,10 +164,13 @@ impl Store {
             .collect::<Result<Vec<_>, _>>()?;
         drop(stmt);
 
-        tx.execute(
-            "UPDATE messages SET read = 1 WHERE to_agent = ?1 AND read = 0",
-            [agent_id],
-        )?;
+        if !messages.is_empty() {
+            let max_id = messages.last().unwrap().id;
+            tx.execute(
+                "UPDATE messages SET read = 1 WHERE to_agent = ?1 AND read = 0 AND id <= ?2",
+                rusqlite::params![agent_id, max_id],
+            )?;
+        }
         tx.commit()?;
         Ok(messages)
     }
