@@ -170,3 +170,27 @@ fn test_history() {
         .success()
         .stdout(predicate::str::contains("task 1"));
 }
+
+#[test]
+fn test_join_creates_session_file() {
+    let tmp = TempDir::new().unwrap();
+    squad(tmp.path()).arg("init").assert().success();
+    squad(tmp.path())
+        .args(["join", "worker", "--role", "worker"])
+        .assert()
+        .success();
+    let session_path = tmp.path().join(".squad").join("sessions").join("worker");
+    assert!(session_path.exists());
+    let token = std::fs::read_to_string(&session_path).unwrap();
+    assert_eq!(token.len(), 36); // UUID v4
+}
+
+#[test]
+fn test_leave_deletes_session_file() {
+    let tmp = TempDir::new().unwrap();
+    squad(tmp.path()).arg("init").assert().success();
+    squad(tmp.path()).args(["join", "worker"]).assert().success();
+    squad(tmp.path()).args(["leave", "worker"]).assert().success();
+    let session_path = tmp.path().join(".squad").join("sessions").join("worker");
+    assert!(!session_path.exists());
+}

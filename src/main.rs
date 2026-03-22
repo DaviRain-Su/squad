@@ -121,6 +121,10 @@ fn open_store(workspace: &Path) -> Result<squad::store::Store> {
     squad::store::Store::open(&db_path)
 }
 
+fn sessions_dir(workspace: &Path) -> PathBuf {
+    workspace.join(".squad").join("sessions")
+}
+
 fn print_messages(messages: &[squad::store::MessageRecord], receiver: Option<&str>) {
     for msg in messages {
         println!("[from {}] {}", msg.from_agent, msg.content);
@@ -142,7 +146,8 @@ fn cmd_init() -> Result<()> {
 fn cmd_join(id: &str, role: &str) -> Result<()> {
     let workspace = find_workspace()?;
     let store = open_store(&workspace)?;
-    let _token = store.register_agent(id, role)?;
+    let token = store.register_agent(id, role)?;
+    squad::session::write_token(&sessions_dir(&workspace), id, &token)?;
     println!("Joined as {id} (role: {role}).");
 
     match squad::roles::load_role(&workspace, role) {
@@ -164,6 +169,7 @@ fn cmd_leave(id: &str) -> Result<()> {
     let workspace = find_workspace()?;
     let store = open_store(&workspace)?;
     store.unregister_agent(id)?;
+    squad::session::delete_token(&sessions_dir(&workspace), id)?;
     println!("{id} left the squad.");
     Ok(())
 }
@@ -321,6 +327,7 @@ fn cmd_clean() -> Result<()> {
     if shm.exists() {
         std::fs::remove_file(&shm)?;
     }
+    squad::session::delete_all(&workspace.join(".squad").join("sessions"))?;
     println!("Cleaned squad state.");
     Ok(())
 }
