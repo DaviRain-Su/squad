@@ -13,6 +13,9 @@ pub fn init_workspace(workspace: &Path) -> Result<()> {
         .with_context(|| format!("failed to create {}", roles_dir.display()))?;
     std::fs::create_dir_all(&teams_dir)
         .with_context(|| format!("failed to create {}", teams_dir.display()))?;
+    let sessions_dir = squad_dir.join("sessions");
+    std::fs::create_dir_all(&sessions_dir)
+        .with_context(|| format!("failed to create {}", sessions_dir.display()))?;
 
     // Write builtin role templates (skip if already exist)
     for role in roles::BUILTIN_ROLES {
