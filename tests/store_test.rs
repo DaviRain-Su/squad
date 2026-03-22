@@ -123,6 +123,15 @@ fn test_pending_messages() {
 }
 
 #[test]
+fn test_register_agent_returns_session_token() {
+    let tmp = TempDir::new().unwrap();
+    let store = Store::open(&tmp.path().join("messages.db")).unwrap();
+    let token = store.register_agent("worker", "worker").unwrap();
+    assert!(!token.is_empty());
+    assert_eq!(token.len(), 36); // UUID v4 format: 8-4-4-4-12
+}
+
+#[test]
 fn test_multiple_agents_same_role() {
     let tmp = TempDir::new().unwrap();
     let store = Store::open(&tmp.path().join("messages.db")).unwrap();

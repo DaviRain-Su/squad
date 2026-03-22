@@ -142,7 +142,7 @@ fn cmd_init() -> Result<()> {
 fn cmd_join(id: &str, role: &str) -> Result<()> {
     let workspace = find_workspace()?;
     let store = open_store(&workspace)?;
-    store.register_agent(id, role)?;
+    let _token = store.register_agent(id, role)?;
     println!("Joined as {id} (role: {role}).");
 
     match squad::roles::load_role(&workspace, role) {

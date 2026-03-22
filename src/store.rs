@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use rusqlite::Connection;
+use rusqlite::{Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
@@ -36,7 +36,8 @@ impl Store {
             "CREATE TABLE IF NOT EXISTS agents (
                 id TEXT PRIMARY KEY,
                 role TEXT NOT NULL,
-                joined_at INTEGER NOT NULL
+                joined_at INTEGER NOT NULL,
+                session_token TEXT
             );
             CREATE TABLE IF NOT EXISTS messages (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -47,16 +48,30 @@ impl Store {
                 read INTEGER NOT NULL DEFAULT 0
             );",
         )?;
+        // Migration: add session_token column if missing (existing DBs)
+        let _ = conn.execute_batch(
+            "ALTER TABLE agents ADD COLUMN session_token TEXT;"
+        );
         Ok(Self { conn })
     }
 
-    pub fn register_agent(&self, id: &str, role: &str) -> Result<()> {
+    pub fn register_agent(&self, id: &str, role: &str) -> Result<String> {
         let now = chrono::Utc::now().timestamp();
+        let token = uuid::Uuid::new_v4().to_string();
         self.conn.execute(
-            "INSERT OR REPLACE INTO agents (id, role, joined_at) VALUES (?1, ?2, ?3)",
-            rusqlite::params![id, role, now],
+            "INSERT OR REPLACE INTO agents (id, role, joined_at, session_token) VALUES (?1, ?2, ?3, ?4)",
+            rusqlite::params![id, role, now, token],
         )?;
-        Ok(())
+        Ok(token)
+    }
+
+    pub fn get_session_token(&self, id: &str) -> Result<Option<String>> {
+        let token: Option<String> = self.conn.query_row(
+            "SELECT session_token FROM agents WHERE id = ?1",
+            [id],
+            |row| row.get(0),
+        ).optional()?;
+        Ok(token)
     }
 
     pub fn unregister_agent(&self, id: &str) -> Result<()> {
