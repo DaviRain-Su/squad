@@ -116,15 +116,19 @@ pub fn register_agent(&self, id: &str, role: &str) -> Result<String> {
 Add to `src/store.rs`:
 
 ```rust
+use rusqlite::OptionalExtension;
+
 pub fn get_session_token(&self, id: &str) -> Result<Option<String>> {
     let token: Option<String> = self.conn.query_row(
         "SELECT session_token FROM agents WHERE id = ?1",
         [id],
         |row| row.get(0),
-    ).ok();
+    ).optional()?;
     Ok(token)
 }
 ```
+
+Note: `.optional()` from `rusqlite::OptionalExtension` correctly distinguishes "no rows found" (returns `Ok(None)`) from real DB errors (propagates the error). Do NOT use `.ok()` which swallows all errors.
 
 - [ ] **Step 6: Fix all callers of register_agent**
 
@@ -226,6 +230,17 @@ fn test_validate_token_mismatch() {
     assert!(result.is_err());
     assert!(result.unwrap_err().to_string().contains("Session replaced"));
 }
+
+#[test]
+fn test_validate_no_file_is_ok() {
+    let tmp = TempDir::new().unwrap();
+    let sessions_dir = tmp.path().join("sessions");
+    std::fs::create_dir_all(&sessions_dir).unwrap();
+
+    // No session file = backward compat, should pass
+    let result = squad::session::validate(&sessions_dir, "worker", "any-token");
+    assert!(result.is_ok());
+}
 ```
 
 - [ ] **Step 2: Run tests to verify they fail**
@@ -282,13 +297,15 @@ pub fn delete_all(sessions_dir: &Path) -> Result<()> {
     Ok(())
 }
 
-/// Validate that the local token matches the expected token.
-/// Returns Ok(()) if they match, or an error with instructions if displaced.
+/// Validate that the local token matches the expected token (from DB).
+/// Returns Ok(()) if they match or if no local session file exists (backward compat).
+/// Errors with "Session replaced" if the local token differs from expected.
 pub fn validate(sessions_dir: &Path, agent_id: &str, expected_token: &str) -> Result<()> {
     let current = read_token(sessions_dir, agent_id)?;
     match current {
+        None => Ok(()), // No session file = agent joined before this feature, skip
         Some(token) if token == expected_token => Ok(()),
-        _ => bail!(
+        Some(_) => bail!(
             "Session replaced. Another terminal joined as {agent_id}. \
              Re-join with a different ID (e.g. squad join {agent_id}-2 --role <your-role>)."
         ),
@@ -455,7 +472,11 @@ fn test_second_join_displaces_first() {
     let second_token = std::fs::read_to_string(&token_path).unwrap();
     assert_ne!(first_token, second_token);
 
-    // First terminal tries to send — simulate by restoring old token
+    // Simulate first terminal: restore its old token file.
+    // In real usage, Terminal 1's file stays unchanged — it's the DB that gets
+    // overwritten by Terminal 2's join. But since both terminals share the same
+    // filesystem path in this test, Terminal 2's join also overwrites the file.
+    // We restore it manually to simulate Terminal 1's perspective.
     std::fs::write(&token_path, &first_token).unwrap();
     squad(tmp.path())
         .args(["send", "worker", "worker", "hello"])
@@ -470,27 +491,33 @@ fn test_second_join_displaces_first() {
 Run: `cargo test test_second_join_displaces_first -- --nocapture`
 Expected: FAIL — send doesn't validate session tokens yet.
 
-- [ ] **Step 3: Add session validation to cmd_send**
+- [ ] **Step 3: Add check_session helper to main.rs**
 
-In `cmd_send`, after `let store = open_store(&workspace)?;`, add token validation for the sender:
+Add a helper that uses `session::validate` with the DB token, avoiding code duplication:
+
+```rust
+/// Check if this agent's session is still valid. Returns Ok(()) if valid or if
+/// no session tracking exists (backward compat). Errors with "Session replaced" if displaced.
+fn check_session(workspace: &Path, store: &squad::store::Store, agent_id: &str) -> Result<()> {
+    let sessions = sessions_dir(workspace);
+    if let Some(db_token) = store.get_session_token(agent_id)? {
+        squad::session::validate(&sessions, agent_id, &db_token)?;
+    }
+    Ok(())
+}
+```
+
+Note: This calls `session::validate` which compares the local file token against the DB token (passed as `expected_token`). If the local file token differs from DB, it means another terminal overwrote the DB token via join. If no local session file exists (agent joined before this feature), `validate` returns an error, but `get_session_token` returning `None` skips the check entirely — graceful backward compatibility.
+
+- [ ] **Step 4: Add session validation to cmd_send**
+
+In `cmd_send`, after `let store = open_store(&workspace)?;`, add one line:
 
 ```rust
 fn cmd_send(from: &str, to: &str, content: &str) -> Result<()> {
     let workspace = find_workspace()?;
     let store = open_store(&workspace)?;
-
-    // Validate sender's session token
-    let sessions = sessions_dir(&workspace);
-    if let Some(local_token) = squad::session::read_token(&sessions, from)? {
-        if let Some(db_token) = store.get_session_token(from)? {
-            if local_token != db_token {
-                bail!(
-                    "Session replaced. Another terminal joined as {from}. \
-                     Re-join with a different ID (e.g. squad join {from}-2 --role <your-role>)."
-                );
-            }
-        }
-    }
+    check_session(&workspace, &store, from)?;
 
     if to == "@all" {
         let recipients = store.broadcast_message(from, content)?;
@@ -507,19 +534,17 @@ fn cmd_send(from: &str, to: &str, content: &str) -> Result<()> {
 }
 ```
 
-Note: validation only triggers when BOTH a local session file AND a DB token exist. If there's no local session file (agent joined before this feature), skip validation gracefully.
+- [ ] **Step 5: Add session validation to cmd_receive**
 
-- [ ] **Step 4: Add session validation to cmd_receive**
-
-In `cmd_receive`, add token validation. For the `--wait` path, check on each poll iteration so displacement is detected within 500ms:
+In `cmd_receive`, validate once at entry (covers non-wait path), and also in the --wait loop (detects displacement during polling):
 
 ```rust
 fn cmd_receive(agent: &str, wait: bool, timeout_secs: u64) -> Result<()> {
     let workspace = find_workspace()?;
-    let sessions = sessions_dir(&workspace);
 
-    // Read local token once (it doesn't change during this process)
-    let local_token = squad::session::read_token(&sessions, agent)?;
+    // Validate session at entry (catches displacement immediately)
+    let store = open_store(&workspace)?;
+    check_session(&workspace, &store, agent)?;
 
     if wait {
         let deadline =
@@ -527,17 +552,8 @@ fn cmd_receive(agent: &str, wait: bool, timeout_secs: u64) -> Result<()> {
         loop {
             let store = open_store(&workspace)?;
 
-            // Check for displacement on each poll
-            if let Some(ref token) = local_token {
-                if let Some(db_token) = store.get_session_token(agent)? {
-                    if token != &db_token {
-                        bail!(
-                            "Session replaced. Another terminal joined as {agent}. \
-                             Re-join with a different ID (e.g. squad join {agent}-2 --role <your-role>)."
-                        );
-                    }
-                }
-            }
+            // Re-check for displacement on each poll (~500ms)
+            check_session(&workspace, &store, agent)?;
 
             if store.has_unread_messages(agent)? {
                 let messages = store.receive_messages(agent)?;
@@ -553,20 +569,6 @@ fn cmd_receive(agent: &str, wait: bool, timeout_secs: u64) -> Result<()> {
             std::thread::sleep(std::time::Duration::from_millis(500));
         }
     } else {
-        let store = open_store(&workspace)?;
-
-        // Check for displacement
-        if let Some(ref token) = local_token {
-            if let Some(db_token) = store.get_session_token(agent)? {
-                if token != &db_token {
-                    bail!(
-                        "Session replaced. Another terminal joined as {agent}. \
-                         Re-join with a different ID (e.g. squad join {agent}-2 --role <your-role>)."
-                    );
-                }
-            }
-        }
-
         let messages = store.receive_messages(agent)?;
         if messages.is_empty() {
             println!("No new messages.");
@@ -599,7 +601,8 @@ fn test_receive_detects_displacement() {
 
     squad(tmp.path()).args(["join", "worker"]).assert().success();
 
-    // Restore first token to simulate first terminal
+    // Restore first token to simulate first terminal's perspective.
+    // (See comment in test_second_join_displaces_first for explanation.)
     std::fs::write(&token_path, &first_token).unwrap();
 
     // Receive should detect displacement
@@ -718,11 +721,11 @@ git commit -m "chore: bump version to 0.3.0"
 | Task | Files | Tests Added |
 |------|-------|-------------|
 | 1. DB schema + register_agent | store.rs, Cargo.toml, store_test.rs | 1 |
-| 2. Session file module | session.rs, lib.rs, init.rs, session_test.rs | 5 |
+| 2. Session file module | session.rs, lib.rs, init.rs, session_test.rs | 6 |
 | 3. Wire into join/leave/clean | main.rs, cli_test.rs | 2 |
 | 4. Validate on send/receive | main.rs, e2e_test.rs | 2 |
 | 5. Slash command update | setup.rs, setup_test.rs | 1 |
 | 6. Final verification | Cargo.toml | 0 |
-| **Total** | **9 files** | **11 new tests** |
+| **Total** | **9 files** | **12 new tests** |
 
-After all tasks: 49 existing + 11 new = **60 tests**.
+After all tasks: 49 existing + 12 new = **61 tests**.
