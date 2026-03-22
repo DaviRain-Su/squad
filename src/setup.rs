@@ -59,13 +59,14 @@ You are joining a squad multi-agent collaboration team.
 
 2. Run `squad init` (safe to run — won't overwrite existing workspace).
 
-3. **Check for ID conflicts before joining:**
-   Run `squad agents` and look at the output.
-   - If your chosen ID already appears in the list, pick a different ID by appending `-2`, `-3`, etc.
-   - If your chosen ID does not appear, proceed with it.
+3. **Clean up stale agents from previous sessions:**
+   Run `squad agents` and check the output.
+   - If ALL agents show "stale" (no active agents), run `squad clean` then `squad init` to start fresh.
+   - If some agents are active (a team is already running), skip cleanup and proceed.
 
 4. Run `squad join <id> --role <role>` to register yourself.
-   - Read the output line that says "Joined as ..." — that confirms your agent ID.
+   - Read the output line that says "Joined as ..." — that confirms your actual agent ID.
+   - If the ID was taken, squad auto-assigns a suffixed ID (e.g. worker-2). Use that ID for all commands.
    - If role instructions are printed (=== Role Instructions ===), follow them.
    - If no predefined template exists, interpret the role using your own knowledge.
 
@@ -114,13 +115,14 @@ You are joining a squad multi-agent collaboration team.
 
 2. Run `squad init` (safe to run — won't overwrite existing workspace).
 
-3. **Check for ID conflicts before joining:**
-   Run `squad agents` and look at the output.
-   - If your chosen ID already appears in the list, pick a different ID by appending `-2`, `-3`, etc.
-   - If your chosen ID does not appear, proceed with it.
+3. **Clean up stale agents from previous sessions:**
+   Run `squad agents` and check the output.
+   - If ALL agents show "stale" (no active agents), run `squad clean` then `squad init` to start fresh.
+   - If some agents are active (a team is already running), skip cleanup and proceed.
 
 4. Run `squad join <id> --role <role>` to register yourself.
-   - Read the output line that says "Joined as ..." — that confirms your agent ID.
+   - Read the output line that says "Joined as ..." — that confirms your actual agent ID.
+   - If the ID was taken, squad auto-assigns a suffixed ID (e.g. worker-2). Use that ID for all commands.
    - If role instructions are printed (=== Role Instructions ===), follow them.
    - If no predefined template exists, interpret the role using your own knowledge.
 
