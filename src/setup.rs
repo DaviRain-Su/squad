@@ -67,18 +67,18 @@ You are joining a squad multi-agent collaboration team.
 
 4. Communicate using squad commands:
    - `squad send <your-id> <to> "<message>"` — send a message (use @all to broadcast)
-   - `squad receive <your-id> --wait` — block until a message arrives
+   - `squad receive <your-id>` — check for new messages
    - `squad agents` — see who is online
    - `squad pending` — check unread messages
    - `squad history` — view message history
 
-5. After completing any task, always run `squad receive <your-id> --wait` to wait for the next message.
+5. After completing any task, check for new messages:
+   `squad receive <your-id>`
+   If no messages, continue with other work or check again shortly.
 
 6. Run `squad agents` to confirm your presence and check teammates' status.
 
-7. **IMPORTANT:** If `squad receive --wait` times out with "No new messages", immediately run it again. Keep retrying until a message arrives. Never stop waiting unless the user tells you to.
-
-8. **SESSION CONFLICT:** If any squad command returns "Session replaced", it means another terminal took your ID. Re-join with a suffixed ID (e.g. `squad join worker-2 --role worker`) and continue.
+7. **SESSION CONFLICT:** If any squad command returns "Session replaced", it means another terminal took your ID. Re-join with a suffixed ID (e.g. `squad join worker-2 --role worker`) and continue.
 "#;
 
 /// TOML format for Gemini CLI (uses {{args}})
@@ -112,18 +112,18 @@ You are joining a squad multi-agent collaboration team.
 
 4. Communicate using squad commands:
    - `squad send <your-id> <to> "<message>"` — send a message (use @all to broadcast)
-   - `squad receive <your-id> --wait` — block until a message arrives
+   - `squad receive <your-id>` — check for new messages
    - `squad agents` — see who is online
    - `squad pending` — check unread messages
    - `squad history` — view message history
 
-5. After completing any task, always run `squad receive <your-id> --wait` to wait for the next message.
+5. After completing any task, check for new messages:
+   `squad receive <your-id>`
+   If no messages, continue with other work or check again shortly.
 
 6. Run `squad agents` to confirm your presence and check teammates' status.
 
-7. **IMPORTANT:** If `squad receive --wait` times out with "No new messages", immediately run it again. Keep retrying until a message arrives. Never stop waiting unless the user tells you to.
-
-8. **SESSION CONFLICT:** If any squad command returns "Session replaced", it means another terminal took your ID. Re-join with a suffixed ID (e.g. `squad join worker-2 --role worker`) and continue.
+7. **SESSION CONFLICT:** If any squad command returns "Session replaced", it means another terminal took your ID. Re-join with a suffixed ID (e.g. `squad join worker-2 --role worker`) and continue.
 """
 "#;
 
