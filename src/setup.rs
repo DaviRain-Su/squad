@@ -44,7 +44,7 @@ The user's input: $ARGUMENTS
 
 You are joining a squad multi-agent collaboration team.
 
-## Instructions
+## Phase 1: Setup (do this once)
 
 1. Parse the arguments above.
 
@@ -57,28 +57,38 @@ You are joining a squad multi-agent collaboration team.
    - If no custom ID provided, use the role name as your ID
    - Examples: "manager" → id=manager, role=manager | "worker worker-2" → id=worker-2, role=worker
 
-2. Run `squad init` first (safe to run — it won't overwrite existing workspace).
+2. Run `squad init` (safe to run — won't overwrite existing workspace).
 
-3. Run these commands in order:
-   a. `squad join <id> --role <role>` — register yourself and read the output
-   b. If role instructions are printed (=== Role Instructions ===), follow them
-   c. If no predefined template exists, **interpret the role using your own knowledge**. Adapt your behavior to what that role would do in a software team. Any role name works — you are not limited to predefined roles.
-   d. `squad agents` — check who else is on the team
+3. **Check for ID conflicts before joining:**
+   Run `squad agents` and look at the output.
+   - If your chosen ID already appears in the list, pick a different ID by appending `-2`, `-3`, etc.
+   - If your chosen ID does not appear, proceed with it.
 
-4. Communicate using squad commands:
-   - `squad send <your-id> <to> "<message>"` — send a message (use @all to broadcast)
-   - `squad receive <your-id>` — check for new messages
-   - `squad agents` — see who is online
-   - `squad pending` — check unread messages
-   - `squad history` — view message history
+4. Run `squad join <id> --role <role>` to register yourself.
+   - Read the output line that says "Joined as ..." — that confirms your agent ID.
+   - If role instructions are printed (=== Role Instructions ===), follow them.
+   - If no predefined template exists, interpret the role using your own knowledge.
 
-5. After completing any task, check for new messages:
-   `squad receive <your-id>`
-   If no messages, continue with other work or check again shortly.
+5. Run `squad agents` to see who else is on the team.
 
-6. Run `squad agents` to confirm your presence and check teammates' status.
+6. **If any squad command returns "Session replaced":** another terminal took your ID. Re-join with a different ID (e.g. `squad join worker-2 --role worker`).
 
-7. **SESSION CONFLICT:** If any squad command returns "Session replaced", it means another terminal took your ID. Re-join with a suffixed ID (e.g. `squad join worker-2 --role worker`) and continue.
+## Phase 2: Work Loop (repeat continuously)
+
+Setup is done. Now enter your work loop. This is your main job.
+
+1. Run `squad receive <your-id>` to check for messages.
+2. If you received a task or message:
+   a. Execute the task or respond as appropriate for your role.
+   b. Report results: `squad send <your-id> <recipient> "<result>"`
+3. If no messages, continue with any ongoing work or think about what proactive work you can do.
+4. Go back to step 1.
+
+Other useful commands:
+- `squad send <your-id> <to> "<message>"` — send a message (use @all to broadcast)
+- `squad agents` — see who is online
+- `squad pending` — check all unread messages
+- `squad history` — view message history
 "#;
 
 /// TOML format for Gemini CLI (uses {{args}})
@@ -89,7 +99,7 @@ The user's input: {{args}}
 
 You are joining a squad multi-agent collaboration team.
 
-## Instructions
+## Phase 1: Setup (do this once)
 
 1. Parse the arguments above.
 
@@ -102,28 +112,38 @@ You are joining a squad multi-agent collaboration team.
    - If no custom ID provided, use the role name as your ID
    - Examples: "manager" → id=manager, role=manager | "worker worker-2" → id=worker-2, role=worker
 
-2. Run `squad init` first (safe to run — it won't overwrite existing workspace).
+2. Run `squad init` (safe to run — won't overwrite existing workspace).
 
-3. Run these commands in order:
-   a. `squad join <id> --role <role>` — register yourself and read the output
-   b. If role instructions are printed (=== Role Instructions ===), follow them
-   c. If no predefined template exists, **interpret the role using your own knowledge**. Adapt your behavior to what that role would do in a software team. Any role name works — you are not limited to predefined roles.
-   d. `squad agents` — check who else is on the team
+3. **Check for ID conflicts before joining:**
+   Run `squad agents` and look at the output.
+   - If your chosen ID already appears in the list, pick a different ID by appending `-2`, `-3`, etc.
+   - If your chosen ID does not appear, proceed with it.
 
-4. Communicate using squad commands:
-   - `squad send <your-id> <to> "<message>"` — send a message (use @all to broadcast)
-   - `squad receive <your-id>` — check for new messages
-   - `squad agents` — see who is online
-   - `squad pending` — check unread messages
-   - `squad history` — view message history
+4. Run `squad join <id> --role <role>` to register yourself.
+   - Read the output line that says "Joined as ..." — that confirms your agent ID.
+   - If role instructions are printed (=== Role Instructions ===), follow them.
+   - If no predefined template exists, interpret the role using your own knowledge.
 
-5. After completing any task, check for new messages:
-   `squad receive <your-id>`
-   If no messages, continue with other work or check again shortly.
+5. Run `squad agents` to see who else is on the team.
 
-6. Run `squad agents` to confirm your presence and check teammates' status.
+6. **If any squad command returns "Session replaced":** another terminal took your ID. Re-join with a different ID (e.g. `squad join worker-2 --role worker`).
 
-7. **SESSION CONFLICT:** If any squad command returns "Session replaced", it means another terminal took your ID. Re-join with a suffixed ID (e.g. `squad join worker-2 --role worker`) and continue.
+## Phase 2: Work Loop (repeat continuously)
+
+Setup is done. Now enter your work loop. This is your main job.
+
+1. Run `squad receive <your-id>` to check for messages.
+2. If you received a task or message:
+   a. Execute the task or respond as appropriate for your role.
+   b. Report results: `squad send <your-id> <recipient> "<result>"`
+3. If no messages, continue with any ongoing work or think about what proactive work you can do.
+4. Go back to step 1.
+
+Other useful commands:
+- `squad send <your-id> <to> "<message>"` — send a message (use @all to broadcast)
+- `squad agents` — see who is online
+- `squad pending` — check all unread messages
+- `squad history` — view message history
 """
 "#;
 

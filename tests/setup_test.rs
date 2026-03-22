@@ -71,3 +71,22 @@ fn test_install_command_overwrites_existing() {
     let content = std::fs::read_to_string(&cmd_path).unwrap();
     assert!(content.contains("squad join")); // new content, not "old content"
 }
+
+#[test]
+fn test_md_content_has_two_phase_structure() {
+    assert!(SQUAD_MD_CONTENT.contains("Phase 1"));
+    assert!(SQUAD_MD_CONTENT.contains("Phase 2"));
+    assert!(SQUAD_MD_CONTENT.contains("Work Loop"));
+}
+
+#[test]
+fn test_md_content_has_actual_id_instruction() {
+    assert!(SQUAD_MD_CONTENT.contains("Joined as"));
+}
+
+#[test]
+fn test_toml_content_has_two_phase_structure() {
+    assert!(SQUAD_TOML_CONTENT.contains("Phase 1"));
+    assert!(SQUAD_TOML_CONTENT.contains("Phase 2"));
+    assert!(SQUAD_TOML_CONTENT.contains("Work Loop"));
+}
