@@ -507,7 +507,7 @@ fn check_session(workspace: &Path, store: &squad::store::Store, agent_id: &str) 
 }
 ```
 
-Note: This calls `session::validate` which compares the local file token against the DB token (passed as `expected_token`). If the local file token differs from DB, it means another terminal overwrote the DB token via join. If no local session file exists (agent joined before this feature), `validate` returns an error, but `get_session_token` returning `None` skips the check entirely — graceful backward compatibility.
+Note: Backward compatibility is handled at two levels: if the agent has no DB token (`get_session_token` returns `None`), the check is skipped entirely. If the agent has a DB token but no local session file (joined before this feature was deployed), `validate` returns `Ok(())`.
 
 - [ ] **Step 4: Add session validation to cmd_send**
 
@@ -580,12 +580,12 @@ fn cmd_receive(agent: &str, wait: bool, timeout_secs: u64) -> Result<()> {
 }
 ```
 
-- [ ] **Step 5: Run tests**
+- [ ] **Step 6: Run tests**
 
 Run: `cargo test`
 Expected: all pass including the new displacement test.
 
-- [ ] **Step 6: Write test for receive displacement**
+- [ ] **Step 7: Write test for receive displacement**
 
 Add to `tests/e2e_test.rs`:
 
@@ -614,12 +614,12 @@ fn test_receive_detects_displacement() {
 }
 ```
 
-- [ ] **Step 7: Run tests**
+- [ ] **Step 8: Run tests**
 
 Run: `cargo test`
 Expected: all pass.
 
-- [ ] **Step 8: Commit**
+- [ ] **Step 9: Commit**
 
 ```bash
 git add src/main.rs tests/cli_test.rs tests/e2e_test.rs
