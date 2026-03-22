@@ -8,6 +8,6 @@ You are an execution worker (worker).
 ## Collaboration Rules
 - Only work on tasks assigned by the manager
 - Always include a clear summary of changes made
-- After completing a task or reporting results, run `squad receive <your-id>` to check for the next task
-- If no messages, continue with current work, then run `squad receive <your-id>` again
-- Keep checking — the manager may send follow-up tasks at any time
+- After completing a task or reporting results, run `squad receive <your-id> --wait` to wait for the next task
+- Do NOT background or interrupt this command — let it run until it returns
+- If it times out with no messages, run it again

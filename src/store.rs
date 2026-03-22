@@ -65,6 +65,25 @@ impl Store {
         Ok(token)
     }
 
+    /// Register with automatic ID suffixing if the requested ID is taken.
+    /// Returns (actual_id, session_token).
+    pub fn register_agent_unique(&self, requested_id: &str, role: &str) -> Result<(String, String)> {
+        let now = chrono::Utc::now().timestamp();
+        let token = uuid::Uuid::new_v4().to_string();
+        let candidates = std::iter::once(requested_id.to_string())
+            .chain((2..=99).map(|i| format!("{}-{}", requested_id, i)));
+        for candidate in candidates {
+            let inserted = self.conn.execute(
+                "INSERT OR IGNORE INTO agents (id, role, joined_at, session_token) VALUES (?1, ?2, ?3, ?4)",
+                rusqlite::params![candidate, role, now, token],
+            )?;
+            if inserted > 0 {
+                return Ok((candidate, token));
+            }
+        }
+        anyhow::bail!("Too many agents with base ID '{}'", requested_id);
+    }
+
     pub fn get_session_token(&self, id: &str) -> Result<Option<String>> {
         let token: Option<String> = self.conn.query_row(
             "SELECT session_token FROM agents WHERE id = ?1",

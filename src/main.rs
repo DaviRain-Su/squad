@@ -156,9 +156,13 @@ fn cmd_init() -> Result<()> {
 fn cmd_join(id: &str, role: &str) -> Result<()> {
     let workspace = find_workspace()?;
     let store = open_store(&workspace)?;
-    let token = store.register_agent(id, role)?;
-    squad::session::write_token(&sessions_dir(&workspace), id, &token)?;
-    println!("Joined as {id} (role: {role}).");
+    let (actual_id, token) = store.register_agent_unique(id, role)?;
+    squad::session::write_token(&sessions_dir(&workspace), &actual_id, &token)?;
+    if actual_id != id {
+        println!("ID '{id}' was taken. Joined as {actual_id} (role: {role}).");
+    } else {
+        println!("Joined as {actual_id} (role: {role}).");
+    }
 
     match squad::roles::load_role(&workspace, role) {
         Ok(prompt) => {

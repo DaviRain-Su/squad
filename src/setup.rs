@@ -77,12 +77,12 @@ You are joining a squad multi-agent collaboration team.
 
 Setup is done. Now enter your work loop. This is your main job.
 
-1. Run `squad receive <your-id>` to check for messages.
-2. If you received a task or message:
+1. Run `squad receive <your-id> --wait` to wait for messages. This command blocks until a message arrives.
+   **IMPORTANT:** Do NOT cancel, background, or interrupt this command. Let it run until it returns on its own.
+2. If you received a message:
    a. Execute the task or respond as appropriate for your role.
    b. Report results: `squad send <your-id> <recipient> "<result>"`
-3. If no messages, continue with any ongoing work or think about what proactive work you can do.
-4. Go back to step 1.
+3. If the command timed out with no messages, **immediately run it again.** Keep retrying until a message arrives. Never stop waiting unless the user tells you to.
 
 Other useful commands:
 - `squad send <your-id> <to> "<message>"` — send a message (use @all to broadcast)
@@ -132,12 +132,12 @@ You are joining a squad multi-agent collaboration team.
 
 Setup is done. Now enter your work loop. This is your main job.
 
-1. Run `squad receive <your-id>` to check for messages.
-2. If you received a task or message:
+1. Run `squad receive <your-id> --wait` to wait for messages. This command blocks until a message arrives.
+   **IMPORTANT:** Do NOT cancel, background, or interrupt this command. Let it run until it returns on its own.
+2. If you received a message:
    a. Execute the task or respond as appropriate for your role.
    b. Report results: `squad send <your-id> <recipient> "<result>"`
-3. If no messages, continue with any ongoing work or think about what proactive work you can do.
-4. Go back to step 1.
+3. If the command timed out with no messages, **immediately run it again.** Keep retrying until a message arrives. Never stop waiting unless the user tells you to.
 
 Other useful commands:
 - `squad send <your-id> <to> "<message>"` — send a message (use @all to broadcast)

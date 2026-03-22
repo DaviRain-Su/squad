@@ -289,66 +289,55 @@ fn test_multiple_workers_same_role() {
         .stdout(predicate::str::contains("implement signup"));
 }
 
-/// Second join displaces first terminal's session
+/// Second join with same ID gets auto-suffixed
 #[test]
-fn test_second_join_displaces_first() {
+fn test_second_join_gets_auto_suffix() {
     let tmp = setup_workspace();
 
-    // First terminal joins as worker
     squad(tmp.path())
         .args(["join", "worker", "--role", "worker"])
         .assert()
-        .success();
+        .success()
+        .stdout(predicate::str::contains("Joined as worker"));
 
-    // Save first terminal's session token
-    let token_path = tmp.path().join(".squad").join("sessions").join("worker");
-    let first_token = std::fs::read_to_string(&token_path).unwrap();
-
-    // Second terminal joins as worker (overwrites)
+    // Second join gets worker-2, not overwrite
     squad(tmp.path())
         .args(["join", "worker", "--role", "worker"])
         .assert()
-        .success();
+        .success()
+        .stdout(predicate::str::contains("Joined as worker-2"));
 
-    // Token file should have changed
-    let second_token = std::fs::read_to_string(&token_path).unwrap();
-    assert_ne!(first_token, second_token);
-
-    // Simulate first terminal: restore its old token file.
-    // In real usage, Terminal 1's file stays unchanged — it's the DB that gets
-    // overwritten by Terminal 2's join. But since both terminals share the same
-    // filesystem path in this test, Terminal 2's join also overwrites the file.
-    // We restore it manually to simulate Terminal 1's perspective.
-    std::fs::write(&token_path, &first_token).unwrap();
+    // Both exist independently
     squad(tmp.path())
-        .args(["send", "worker", "worker", "hello"])
+        .arg("agents")
         .assert()
-        .failure()
-        .stderr(predicate::str::contains("Session replaced"));
+        .success()
+        .stdout(predicate::str::contains("worker"))
+        .stdout(predicate::str::contains("worker-2"));
+
+    // Original worker is not displaced — can still send
+    squad(tmp.path())
+        .args(["send", "worker", "worker-2", "hello from original"])
+        .assert()
+        .success();
 }
 
-/// Receive detects displacement
+/// Three agents with same base ID all get unique IDs
 #[test]
-fn test_receive_detects_displacement() {
+fn test_three_agents_same_base_id() {
     let tmp = setup_workspace();
 
-    // Join, save token, then overwrite by re-joining
-    squad(tmp.path()).args(["join", "worker"]).assert().success();
-    let token_path = tmp.path().join(".squad").join("sessions").join("worker");
-    let first_token = std::fs::read_to_string(&token_path).unwrap();
+    squad(tmp.path()).args(["join", "member"]).assert().success()
+        .stdout(predicate::str::contains("Joined as member"));
+    squad(tmp.path()).args(["join", "member"]).assert().success()
+        .stdout(predicate::str::contains("Joined as member-2"));
+    squad(tmp.path()).args(["join", "member"]).assert().success()
+        .stdout(predicate::str::contains("Joined as member-3"));
 
-    squad(tmp.path()).args(["join", "worker"]).assert().success();
-
-    // Restore first token to simulate first terminal's perspective.
-    // (See comment in test_second_join_displaces_first for explanation.)
-    std::fs::write(&token_path, &first_token).unwrap();
-
-    // Receive should detect displacement
-    squad(tmp.path())
-        .args(["receive", "worker"])
-        .assert()
-        .failure()
-        .stderr(predicate::str::contains("Session replaced"));
+    let output = squad(tmp.path()).arg("agents").output().unwrap();
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("member-2"));
+    assert!(stdout.contains("member-3"));
 }
 
 /// Pending shows unread messages overview
