@@ -1,10 +1,28 @@
-[English](README.md)
+<div align="center">
 
 # squad
 
 **多 AI 智能体终端协作 — 通过简单的 CLI 命令实现。**
 
-squad 让多个 AI CLI 工具（Claude Code、Gemini、Codex 等）通过 Shell 命令 + SQLite 进行通信。无守护进程、无后台进程 — 每条命令都是一次性操作。
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Rust](https://img.shields.io/badge/Rust-1.77+-orange.svg)](https://www.rust-lang.org/)
+[![GitHub stars](https://img.shields.io/github/stars/mco-org/squad)](https://github.com/mco-org/squad/stargazers)
+
+squad 让多个 AI CLI 工具通过 Shell 命令 + SQLite 进行通信。
+无守护进程、无后台进程 — 每条命令都是一次性操作。
+
+[English](README.md) | 简体中文
+
+### 支持的平台
+
+| <img src="https://cdn.simpleicons.org/anthropic/white" width="28"> | <img src="https://cdn.simpleicons.org/google/white" width="28"> | <img src="https://cdn.simpleicons.org/openai/white" width="28"> | <img src="https://cdn.simpleicons.org/square/white" width="28"> |
+|:---:|:---:|:---:|:---:|
+| **Claude Code** | **Gemini CLI** | **Codex CLI** | **OpenCode** |
+| `claude` | `gemini` | `codex` | `opencode` |
+
+</div>
+
+---
 
 ## 快速开始
 
@@ -24,44 +42,38 @@ squad init
 /squad inspector    # 终端 3
 ```
 
-或手动操作：
+就这么简单。每个 Agent 加入后会读取角色指令，然后进入工作循环等待消息。Manager 会分析你的目标并分配任务给 Worker。
 
-```bash
-# 终端 1 — 启动管理者
-squad join manager --role manager
+## 使用流程
 
-# 终端 2 — 启动工作者
-squad join worker --role worker
-
-# 终端 3 — 启动审查者
-squad join inspector --role inspector
-
-# 管理者分配任务
-squad send manager worker "实现 JWT 认证模块"
-
-# 工作者检查收件箱
-squad receive worker
-
-# 工作者完成后汇报
-squad send worker manager "完成：已在 src/auth.rs 添加 JWT 认证"
-
-# 管理者转发给审查者
-squad send manager inspector "审查认证实现"
-
-# 审查者审查后汇报
-squad send inspector manager "PASS: 认证模块没有问题"
 ```
+你（用户）
+  │
+  ├── 终端 1: /squad manager
+  │     Manager 加入，询问目标，
+  │     拆分任务并分配给 Worker。
+  │
+  ├── 终端 2: /squad worker
+  │     Worker 加入，通过 squad receive --wait 等待任务，
+  │     执行分配的工作，汇报结果。
+  │
+  └── 终端 3: /squad worker
+        自动分配为 worker-2（ID 冲突自动解决）。
+        同样的行为 — 等待、执行、汇报。
+```
+
+相同角色的多个 Agent 会自动获得唯一 ID（`worker`、`worker-2`、`worker-3`）。
 
 ## 命令一览
 
 | 命令 | 说明 |
 |------|------|
 | `squad init` | 初始化工作区（创建 `.squad/` 目录） |
-| `squad join <id> [--role <role>]` | 以 Agent 身份加入（role 默认为 id） |
+| `squad join <id> [--role <role>]` | 以 Agent 身份加入（ID 冲突时自动添加后缀） |
 | `squad leave <id>` | 移除 Agent |
 | `squad agents` | 列出在线 Agent |
 | `squad send <from> <to> <message>` | 发送消息（`@all` 广播给所有人） |
-| `squad receive <id> [--wait]` | 检查收件箱（`--wait` 仅用于调试） |
+| `squad receive <id> [--wait]` | 检查收件箱（`--wait` 阻塞直到消息到达） |
 | `squad pending` | 查看所有未读消息 |
 | `squad history [agent]` | 查看所有消息历史（含已读） |
 | `squad roles` | 列出可用角色 |
@@ -81,10 +93,10 @@ squad setup --list    # 查看支持的平台
 
 | 平台 | 二进制 | 命令位置 |
 |------|--------|---------|
-| Claude Code | `claude` | `~/.claude/commands/squad.md`（斜杠命令） |
-| Gemini CLI | `gemini` | `~/.gemini/commands/squad.toml`（斜杠命令） |
-| Codex CLI | `codex` | `~/.codex/prompts/squad.md`（斜杠命令） |
-| OpenCode | `opencode` | `~/.config/opencode/commands/squad.md`（斜杠命令） |
+| Claude Code | `claude` | `~/.claude/commands/squad.md` |
+| Gemini CLI | `gemini` | `~/.gemini/commands/squad.toml` |
+| Codex CLI | `codex` | `~/.codex/prompts/squad.md` |
+| OpenCode | `opencode` | `~/.config/opencode/commands/squad.md` |
 
 安装后，在任何执行过 `squad init` 的项目中使用 `/squad <角色>` 即可。
 
@@ -92,17 +104,52 @@ squad setup --list    # 查看支持的平台
 
 Agent 通过共享的 SQLite 数据库（`.squad/messages.db`）通信。每个 Agent 在自己的终端中运行，使用 CLI 命令收发消息。
 
-### 消息检查
+```
+终端 1 (manager)              终端 2 (worker)              终端 3 (worker-2)
+┌─────────────────────┐      ┌─────────────────────┐      ┌─────────────────────┐
+│ /squad manager       │      │ /squad worker        │      │ /squad worker        │
+│                      │      │ (自动 ID: worker)    │      │ (自动 ID: worker-2)  │
+│                      │      │                      │      │                      │
+│ squad send manager   │─────>│ squad receive worker │      │                      │
+│   worker "任务 A"    │      │   --wait             │      │                      │
+│                      │      │                      │      │                      │
+│ squad send manager   │──────────────────────────────────>│ squad receive         │
+│   worker-2 "任务 B"  │      │                      │      │   worker-2 --wait    │
+│                      │      │                      │      │                      │
+│ squad receive manager│<─────│ squad send worker    │      │                      │
+│   --wait             │      │   manager "完成 A"   │      │                      │
+│                      │      │                      │      │                      │
+│                      │<──────────────────────────────────│ squad send worker-2   │
+│                      │      │                      │      │   manager "完成 B"   │
+└─────────────────────┘      └─────────────────────┘      └─────────────────────┘
+```
 
-Agent 完成任务后，检查新消息：
+所有消息通过 SQLite 传递 — 无守护进程、无 socket、无后台进程。
+
+### 消息流程
+
+Agent 使用 `squad receive --wait` 阻塞等待消息：
 
 ```
-Agent 完成任务
+Agent 加入
+  → squad receive <id> --wait          ← 阻塞等待消息
+  → 收到 Manager 分配的任务
+  → 执行任务
   → squad send <id> manager "完成：摘要..."
-  → squad receive <id>                     ← 检查新任务
-  → 没有消息则继续其他工作
-  → 稍后再次检查
+  → squad receive <id> --wait          ← 再次阻塞等待下一个任务
 ```
+
+### ID 自动后缀
+
+当多个 Agent 使用相同 ID 加入时，squad 自动分配唯一 ID：
+
+```bash
+squad join worker    # → Joined as worker
+squad join worker    # → ID 'worker' was taken. Joined as worker-2
+squad join worker    # → ID 'worker' was taken. Joined as worker-3
+```
+
+这是服务端原子操作（`INSERT OR IGNORE`），即使多个终端同时加入也不会冲突。
 
 ## 角色模板
 
@@ -121,7 +168,34 @@ squad join db-expert --role dba
 
 ## 团队模板
 
-团队是 `.squad/teams/` 下的 YAML 文件，定义所需角色组合。使用 `squad team <name>` 查看。
+团队是 `.squad/teams/` 下的 YAML 文件，定义所需角色组合：
+
+```yaml
+# .squad/teams/dev.yaml
+name: dev
+roles:
+  manager:
+    prompt_file: manager
+  worker:
+    prompt_file: worker
+  inspector:
+    prompt_file: inspector
+```
+
+使用 `squad team <name>` 查看团队配置。
+
+## 广播
+
+向所有 Agent 发送消息：
+
+```bash
+squad send manager @all "API 接口已更新，请更新你们的实现"
+```
+
+## 系统要求
+
+- Rust 1.77+（编译需要）
+- macOS 或 Linux
 
 ## 许可证
 

@@ -1,10 +1,28 @@
-[中文](README.zh-CN.md)
+<div align="center">
 
 # squad
 
 **Multi-AI-agent terminal collaboration via simple CLI commands.**
 
-squad lets multiple AI CLI agents (Claude Code, Gemini, Codex, etc.) communicate through shell commands backed by SQLite. No daemon, no background processes — every command is a one-shot operation.
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Rust](https://img.shields.io/badge/Rust-1.77+-orange.svg)](https://www.rust-lang.org/)
+[![GitHub stars](https://img.shields.io/github/stars/mco-org/squad)](https://github.com/mco-org/squad/stargazers)
+
+squad lets multiple AI CLI agents communicate through shell commands + SQLite.
+No daemon, no background processes — every command is a one-shot operation.
+
+English | [简体中文](README.zh-CN.md)
+
+### Supported Platforms
+
+| <img src="https://cdn.simpleicons.org/anthropic/white" width="28"> | <img src="https://cdn.simpleicons.org/google/white" width="28"> | <img src="https://cdn.simpleicons.org/openai/white" width="28"> | <img src="https://cdn.simpleicons.org/square/white" width="28"> |
+|:---:|:---:|:---:|:---:|
+| **Claude Code** | **Gemini CLI** | **Codex CLI** | **OpenCode** |
+| `claude` | `gemini` | `codex` | `opencode` |
+
+</div>
+
+---
 
 ## Quick Start
 
@@ -24,24 +42,38 @@ squad init
 /squad inspector    # terminal 3
 ```
 
-Or manually:
+That's it. Each agent joins, reads its role instructions, and enters a work loop waiting for messages. The manager breaks down your goal and assigns tasks to workers.
 
-```bash
-squad join manager --role manager
-squad send manager worker "implement auth module with JWT"
-squad receive worker
+## Usage Flow
+
 ```
+You (human)
+  │
+  ├── Terminal 1: /squad manager
+  │     Manager joins, asks you for the goal,
+  │     breaks it into tasks, assigns to workers.
+  │
+  ├── Terminal 2: /squad worker
+  │     Worker joins, waits for tasks via squad receive --wait,
+  │     executes assigned work, reports back.
+  │
+  └── Terminal 3: /squad worker
+        Auto-assigned as worker-2 (ID conflict resolved automatically).
+        Same behavior — waits, executes, reports.
+```
+
+Multiple agents with the same role get unique IDs automatically (`worker`, `worker-2`, `worker-3`).
 
 ## Commands
 
 | Command | Description |
 |---------|-------------|
 | `squad init` | Initialize workspace (creates `.squad/` directory) |
-| `squad join <id> [--role <role>]` | Join as agent (role defaults to id) |
+| `squad join <id> [--role <role>]` | Join as agent (auto-suffixes if ID is taken) |
 | `squad leave <id>` | Remove agent |
 | `squad agents` | List online agents |
 | `squad send <from> <to> <message>` | Send message (`@all` to broadcast) |
-| `squad receive <id> [--wait]` | Check inbox (`--wait` blocks, for debug only) |
+| `squad receive <id> [--wait]` | Check inbox (`--wait` blocks until message arrives) |
 | `squad pending` | Show all unread messages |
 | `squad history [agent]` | Show all messages including read |
 | `squad roles` | List available roles |
@@ -65,10 +97,10 @@ Supported platforms:
 
 | Platform | Binary | Command location |
 |----------|--------|-----------------|
-| Claude Code | `claude` | `~/.claude/commands/squad.md` (slash command) |
-| Gemini CLI | `gemini` | `~/.gemini/commands/squad.toml` (slash command) |
-| Codex CLI | `codex` | `~/.codex/prompts/squad.md` (slash command) |
-| OpenCode | `opencode` | `~/.config/opencode/commands/squad.md` (slash command) |
+| Claude Code | `claude` | `~/.claude/commands/squad.md` |
+| Gemini CLI | `gemini` | `~/.gemini/commands/squad.toml` |
+| Codex CLI | `codex` | `~/.codex/prompts/squad.md` |
+| OpenCode | `opencode` | `~/.config/opencode/commands/squad.md` |
 
 Once installed, use `/squad <role>` in any project where `squad init` has been run.
 
@@ -77,34 +109,51 @@ Once installed, use `/squad <role>` in any project where `squad init` has been r
 Agents communicate through a shared SQLite database (`.squad/messages.db`). Each agent runs in its own terminal and uses CLI commands to send and receive messages.
 
 ```
-Terminal 1 (manager)          Terminal 2 (worker)          Terminal 3 (inspector)
+Terminal 1 (manager)          Terminal 2 (worker)          Terminal 3 (worker-2)
 ┌─────────────────────┐      ┌─────────────────────┐      ┌─────────────────────┐
-│ squad join manager   │      │ squad join worker    │      │ squad join inspector │
+│ /squad manager       │      │ /squad worker        │      │ /squad worker        │
+│                      │      │ (auto-ID: worker)    │      │ (auto-ID: worker-2)  │
 │                      │      │                      │      │                      │
 │ squad send manager   │─────>│ squad receive worker │      │                      │
-│   worker "task..."   │      │                      │      │                      │
+│   worker "task A"    │      │   --wait             │      │                      │
+│                      │      │                      │      │                      │
+│ squad send manager   │──────────────────────────────────>│ squad receive         │
+│   worker-2 "task B"  │      │                      │      │   worker-2 --wait    │
 │                      │      │                      │      │                      │
 │ squad receive manager│<─────│ squad send worker    │      │                      │
-│                      │      │   manager "done..."  │      │                      │
+│   --wait             │      │   manager "done A"   │      │                      │
 │                      │      │                      │      │                      │
-│ squad send manager   │─────────────────────────────────>│ squad receive         │
-│   inspector "review" │      │                      │      │   inspector          │
+│                      │<──────────────────────────────────│ squad send worker-2   │
+│                      │      │                      │      │   manager "done B"   │
 └─────────────────────┘      └─────────────────────┘      └─────────────────────┘
 ```
 
 All messages flow through SQLite — no daemon, no sockets, no background processes.
 
-### Checking for Messages
+### Message Flow
 
-After completing work, agents check for new messages:
+Agents use `squad receive --wait` to block until messages arrive:
 
 ```
-Agent completes task
+Agent joins
+  → squad receive <id> --wait          ← blocks until message arrives
+  → receives task from manager
+  → executes the task
   → squad send <id> manager "done: summary..."
-  → squad receive <id>                     ← check for next task
-  → if no messages, continue other work
-  → check again when ready
+  → squad receive <id> --wait          ← blocks again for next task
 ```
+
+### ID Auto-Suffix
+
+When multiple agents join with the same ID, squad automatically assigns unique IDs:
+
+```bash
+squad join worker    # → Joined as worker
+squad join worker    # → ID 'worker' was taken. Joined as worker-2
+squad join worker    # → ID 'worker' was taken. Joined as worker-3
+```
+
+This is handled server-side (atomic `INSERT OR IGNORE`), so even simultaneous joins from different terminals are safe.
 
 ## Role Templates
 
