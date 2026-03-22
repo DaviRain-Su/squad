@@ -1,26 +1,42 @@
-<div align="center">
+<h1 align="center">squad</h1>
 
-# squad
+<p align="center"><strong>Multi-AI-agent terminal collaboration via simple CLI commands.</strong></p>
 
-**Multi-AI-agent terminal collaboration via simple CLI commands.**
+<p align="center">
+  <a href="https://github.com/mco-org/squad/stargazers"><img src="https://img.shields.io/github/stars/mco-org/squad?style=flat-square&color=f59e0b" alt="GitHub stars" /></a>
+  <a href="./LICENSE"><img src="https://img.shields.io/badge/License-MIT-22c55e?style=flat-square" alt="License: MIT" /></a>
+  <img src="https://img.shields.io/badge/Rust-1.77%2B-orange?style=flat-square&logo=rust&logoColor=white" alt="Rust 1.77+" />
+  <img src="https://img.shields.io/badge/Platforms-4%20supported-7c3aed?style=flat-square" alt="4 supported platforms" />
+</p>
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Rust](https://img.shields.io/badge/Rust-1.77+-orange.svg)](https://www.rust-lang.org/)
-[![GitHub stars](https://img.shields.io/github/stars/mco-org/squad)](https://github.com/mco-org/squad/stargazers)
+<p align="center">squad lets multiple AI CLI agents communicate through shell commands + SQLite.<br/>No daemon, no background processes — every command is a one-shot operation.</p>
 
-squad lets multiple AI CLI agents communicate through shell commands + SQLite.
-No daemon, no background processes — every command is a one-shot operation.
+<p align="center">English | <a href="./README.zh-CN.md">简体中文</a></p>
 
-English | [简体中文](README.zh-CN.md)
+<table align="center">
+  <tr>
+    <td align="center"><a href="https://github.com/anthropics/claude-code"><img src="https://github.com/anthropics.png?size=96" alt="Claude Code" width="48" /></a></td>
+    <td align="center"><a href="https://github.com/google-gemini/gemini-cli"><img src="https://github.com/google-gemini.png?size=96" alt="Gemini CLI" width="48" /></a></td>
+    <td align="center"><a href="https://github.com/openai/codex"><img src="https://github.com/openai.png?size=96" alt="Codex CLI" width="48" /></a></td>
+    <td align="center"><a href="https://github.com/sst/opencode"><img src="https://raw.githubusercontent.com/sst/opencode/master/packages/console/app/src/asset/brand/opencode-logo-light-square.svg" alt="OpenCode" width="48" /></a></td>
+  </tr>
+  <tr>
+    <td align="center"><strong>Claude Code</strong></td>
+    <td align="center"><strong>Gemini CLI</strong></td>
+    <td align="center"><strong>Codex CLI</strong></td>
+    <td align="center"><strong>OpenCode</strong></td>
+  </tr>
+  <tr>
+    <td align="center"><code>claude</code></td>
+    <td align="center"><code>gemini</code></td>
+    <td align="center"><code>codex</code></td>
+    <td align="center"><code>opencode</code></td>
+  </tr>
+</table>
 
-### Supported Platforms
-
-| <img src="https://cdn.simpleicons.org/anthropic/white" width="28"> | <img src="https://cdn.simpleicons.org/google/white" width="28"> | <img src="https://cdn.simpleicons.org/openai/white" width="28"> | <img src="https://cdn.simpleicons.org/square/white" width="28"> |
-|:---:|:---:|:---:|:---:|
-| **Claude Code** | **Gemini CLI** | **Codex CLI** | **OpenCode** |
-| `claude` | `gemini` | `codex` | `opencode` |
-
-</div>
+> One slash command. Multiple agents collaborating in real-time.
+>
+> Assign a manager, spin up workers, add an inspector — each in its own terminal, communicating through SQLite.
 
 ---
 

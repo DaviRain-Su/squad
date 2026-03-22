@@ -1,26 +1,42 @@
-<div align="center">
+<h1 align="center">squad</h1>
 
-# squad
+<p align="center"><strong>多 AI 智能体终端协作 — 通过简单的 CLI 命令实现。</strong></p>
 
-**多 AI 智能体终端协作 — 通过简单的 CLI 命令实现。**
+<p align="center">
+  <a href="https://github.com/mco-org/squad/stargazers"><img src="https://img.shields.io/github/stars/mco-org/squad?style=flat-square&color=f59e0b" alt="GitHub stars" /></a>
+  <a href="./LICENSE"><img src="https://img.shields.io/badge/License-MIT-22c55e?style=flat-square" alt="License: MIT" /></a>
+  <img src="https://img.shields.io/badge/Rust-1.77%2B-orange?style=flat-square&logo=rust&logoColor=white" alt="Rust 1.77+" />
+  <img src="https://img.shields.io/badge/Platforms-4%20supported-7c3aed?style=flat-square" alt="4 supported platforms" />
+</p>
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Rust](https://img.shields.io/badge/Rust-1.77+-orange.svg)](https://www.rust-lang.org/)
-[![GitHub stars](https://img.shields.io/github/stars/mco-org/squad)](https://github.com/mco-org/squad/stargazers)
+<p align="center">squad 让多个 AI CLI 工具通过 Shell 命令 + SQLite 进行通信。<br/>无守护进程、无后台进程 — 每条命令都是一次性操作。</p>
 
-squad 让多个 AI CLI 工具通过 Shell 命令 + SQLite 进行通信。
-无守护进程、无后台进程 — 每条命令都是一次性操作。
+<p align="center"><a href="./README.md">English</a> | 简体中文</p>
 
-[English](README.md) | 简体中文
+<table align="center">
+  <tr>
+    <td align="center"><a href="https://github.com/anthropics/claude-code"><img src="https://github.com/anthropics.png?size=96" alt="Claude Code" width="48" /></a></td>
+    <td align="center"><a href="https://github.com/google-gemini/gemini-cli"><img src="https://github.com/google-gemini.png?size=96" alt="Gemini CLI" width="48" /></a></td>
+    <td align="center"><a href="https://github.com/openai/codex"><img src="https://github.com/openai.png?size=96" alt="Codex CLI" width="48" /></a></td>
+    <td align="center"><a href="https://github.com/sst/opencode"><img src="https://raw.githubusercontent.com/sst/opencode/master/packages/console/app/src/asset/brand/opencode-logo-light-square.svg" alt="OpenCode" width="48" /></a></td>
+  </tr>
+  <tr>
+    <td align="center"><strong>Claude Code</strong></td>
+    <td align="center"><strong>Gemini CLI</strong></td>
+    <td align="center"><strong>Codex CLI</strong></td>
+    <td align="center"><strong>OpenCode</strong></td>
+  </tr>
+  <tr>
+    <td align="center"><code>claude</code></td>
+    <td align="center"><code>gemini</code></td>
+    <td align="center"><code>codex</code></td>
+    <td align="center"><code>opencode</code></td>
+  </tr>
+</table>
 
-### 支持的平台
-
-| <img src="https://cdn.simpleicons.org/anthropic/white" width="28"> | <img src="https://cdn.simpleicons.org/google/white" width="28"> | <img src="https://cdn.simpleicons.org/openai/white" width="28"> | <img src="https://cdn.simpleicons.org/square/white" width="28"> |
-|:---:|:---:|:---:|:---:|
-| **Claude Code** | **Gemini CLI** | **Codex CLI** | **OpenCode** |
-| `claude` | `gemini` | `codex` | `opencode` |
-
-</div>
+> 一条斜杠命令，多个 Agent 实时协作。
+>
+> 分配 Manager、启动 Worker、添加 Inspector — 各自在独立终端中运行，通过 SQLite 通信。
 
 ---
 
