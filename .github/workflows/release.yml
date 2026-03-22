@@ -175,7 +175,8 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release upload "${{ needs.create-release.outputs.tag }}" SHA256SUMS
+          gh release upload "${{ needs.create-release.outputs.tag }}" SHA256SUMS \
+            --repo "${{ github.repository }}"
 
   # ---------------------------------------------------------------------------
   # 4. Publish the draft release (undraft it)
