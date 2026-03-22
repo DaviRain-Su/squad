@@ -54,6 +54,11 @@ fn test_install_command_creates_parent_dirs() {
 }
 
 #[test]
+fn test_md_content_has_session_conflict_instruction() {
+    assert!(SQUAD_MD_CONTENT.contains("Session replaced"));
+}
+
+#[test]
 fn test_install_command_overwrites_existing() {
     let tmp = TempDir::new().unwrap();
     let cmd_dir = tmp.path().join("commands");
