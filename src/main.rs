@@ -166,7 +166,7 @@ fn cmd_join(id: &str, role: &str) -> Result<()> {
         }
         Err(_) => {
             println!("\nNo predefined template for \"{role}\". Interpret this role autonomously.");
-            println!("Communicate using: squad send, squad receive --wait, squad agents");
+            println!("Communicate using: squad send, squad receive, squad agents");
             println!("Tip: create .squad/roles/{role}.md to customize behavior.");
             let roles = squad::roles::list_roles(&workspace);
             println!("Predefined roles: {}", roles.join(", "));
@@ -406,7 +406,7 @@ COMMANDS
   squad leave <id>                           Remove agent
   squad agents                               List online agents
   squad send <from> <to> <message>           Send message (use @all to broadcast)
-  squad receive <id> [--wait] [--timeout N]  Check inbox (--wait blocks until message)
+  squad receive <id> [--wait] [--timeout N]  Check inbox (--wait blocks, for debug only)
   squad pending                              Show all unread messages
   squad history [agent]                      Show all messages (including read)
   squad roles                                List available roles
@@ -421,7 +421,7 @@ QUICK START
   2. squad join manager --role manager        Join as manager in terminal 1
   3. squad join worker --role worker          Join as worker in terminal 2
   4. squad send manager worker "task..."      Manager assigns task
-  5. squad receive worker --wait              Worker waits for task
+  5. squad receive worker                     Worker checks for task
   6. squad send worker manager "done..."      Worker reports back
 
 HOW TO PARTICIPATE
@@ -429,11 +429,11 @@ HOW TO PARTICIPATE
   1. squad join <role> --role <role>          Register and read role instructions
   2. Do your work as instructed by the role
   3. squad send <your-id> <to> "result"       Report results
-  4. squad receive <your-id> --wait           Wait for next task or feedback
+  4. squad receive <your-id>                  Check for next task or feedback
 
 EXAMPLES
   squad send manager worker "implement auth module with JWT"
   squad send manager @all "API contract updated, rebase your work"
-  squad receive worker --wait --timeout 60
+  squad receive worker
   squad history worker
 "#;
