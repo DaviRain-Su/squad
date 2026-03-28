@@ -66,16 +66,25 @@ jobs:
           - target: aarch64-apple-darwin
             os: macos-latest
             use-cross: false
+            archive-format: tar.gz
 
           # macOS Intel — cross-compile from ARM runner
           - target: x86_64-apple-darwin
             os: macos-latest
             use-cross: false
+            archive-format: tar.gz
 
           # Linux x86_64 static (musl) — use cross for Docker-based build
           - target: x86_64-unknown-linux-musl
             os: ubuntu-latest
             use-cross: true
+            archive-format: tar.gz
+
+          # Windows x86_64 — native MSVC build on Windows runner
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+            use-cross: false
+            archive-format: zip
 
     steps:
       - uses: actions/checkout@v4
@@ -100,6 +109,7 @@ jobs:
           restore-keys: ${{ runner.os }}-${{ matrix.target }}-cargo-
 
       - name: Build release binary
+        shell: bash
         run: |
           if [ "${{ matrix.use-cross }}" = "true" ]; then
             cross build --release --locked --target ${{ matrix.target }}
@@ -108,6 +118,7 @@ jobs:
           fi
 
       - name: Strip binary
+        shell: bash
         run: |
           BIN="target/${{ matrix.target }}/release/squad"
           case "${{ matrix.target }}" in
@@ -115,13 +126,17 @@ jobs:
               # cross builds inside Docker; strip if available on host
               strip "$BIN" 2>/dev/null || true
               ;;
+            x86_64-pc-windows-msvc)
+              ;;
             *-apple-darwin)
               strip "$BIN"
               ;;
           esac
 
-      - name: Create archive
+      - name: Create archive (.tar.gz)
+        if: matrix.archive-format == 'tar.gz'
         id: archive
+        shell: bash
         run: |
           ARCHIVE="squad-${{ matrix.target }}.tar.gz"
           STAGING="staging-${{ matrix.target }}"
@@ -141,7 +156,32 @@ jobs:
           shasum -a 256 "$ARCHIVE" > "$ARCHIVE.sha256"
           echo "checksum=$ARCHIVE.sha256" >> "$GITHUB_OUTPUT"
 
+      - name: Create archive (.zip)
+        if: matrix.archive-format == 'zip'
+        id: archive
+        shell: pwsh
+        run: |
+          $archive = "squad-${{ matrix.target }}.zip"
+          $staging = "staging-${{ matrix.target }}"
+
+          New-Item -ItemType Directory -Force -Path $staging | Out-Null
+          Copy-Item "target/${{ matrix.target }}/release/squad.exe" "$staging/"
+
+          foreach ($f in @("README.md", "LICENSE", "CHANGELOG.md")) {
+            if (Test-Path $f) {
+              Copy-Item $f $staging/
+            }
+          }
+
+          Compress-Archive -Path "$staging/*" -DestinationPath $archive -Force
+          Add-Content -Path $env:GITHUB_OUTPUT -Value "archive=$archive"
+
+          $hash = (Get-FileHash -Algorithm SHA256 $archive).Hash.ToLower()
+          Set-Content -Path "$archive.sha256" -Value "$hash  $archive"
+          Add-Content -Path $env:GITHUB_OUTPUT -Value "checksum=$archive.sha256"
+
       - name: Upload archive to release
+        shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -163,13 +203,16 @@ jobs:
         run: |
           gh release download "${{ needs.create-release.outputs.tag }}" \
             --repo "${{ github.repository }}" \
-            --pattern "squad-*.tar.gz" \
+            --pattern "squad-*" \
             --dir release
 
       - name: Generate SHA256SUMS
+        shell: bash
         run: |
           cd release
-          shasum -a 256 *.tar.gz | tee ../SHA256SUMS
+          for f in squad-*.tar.gz squad-*.zip; do
+            [ -e "$f" ] && shasum -a 256 "$f"
+          done | tee ../SHA256SUMS
 
       - name: Upload checksums to release
         env:

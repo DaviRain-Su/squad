@@ -46,7 +46,12 @@
 # Homebrew (macOS)
 brew install mco-org/tap/squad
 
-# Or download prebuilt binary from GitHub Releases
+# Windows (GitHub Releases)
+# 1. Download squad-x86_64-pc-windows-msvc.zip
+# 2. Extract squad.exe to a folder like C:\Tools\squad
+# 3. Add that folder to PATH
+
+# Or download another prebuilt binary from GitHub Releases
 # https://github.com/mco-org/squad/releases
 
 # Or build from source
