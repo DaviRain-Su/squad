@@ -149,7 +149,7 @@ jobs:
             for f in README.md LICENSE CHANGELOG.md; do
               [ -f "$f" ] && cp "$f" "$STAGING/"
             done
-            cd "$STAGING" && zip -r "../$ARCHIVE" . && cd ..
+            7z a "$ARCHIVE" "./$STAGING/*"
           else
             ARCHIVE="squad-$TARGET.tar.gz"
             cp "target/$TARGET/release/squad" "$STAGING/"
