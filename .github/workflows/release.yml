@@ -133,52 +133,33 @@ jobs:
               ;;
           esac
 
-      - name: Create archive (.tar.gz)
-        if: matrix.archive-format == 'tar.gz'
+      - name: Create archive
         id: archive
         shell: bash
         run: |
-          ARCHIVE="squad-${{ matrix.target }}.tar.gz"
-          STAGING="staging-${{ matrix.target }}"
+          TARGET="${{ matrix.target }}"
+          FORMAT="${{ matrix.archive-format }}"
+          STAGING="staging-$TARGET"
 
           mkdir -p "$STAGING"
-          cp "target/${{ matrix.target }}/release/squad" "$STAGING/"
 
-          # Include docs if present
-          for f in README.md LICENSE CHANGELOG.md; do
-            [ -f "$f" ] && cp "$f" "$STAGING/"
-          done
+          if [ "$FORMAT" = "zip" ]; then
+            ARCHIVE="squad-$TARGET.zip"
+            cp "target/$TARGET/release/squad.exe" "$STAGING/"
+            for f in README.md LICENSE CHANGELOG.md; do
+              [ -f "$f" ] && cp "$f" "$STAGING/"
+            done
+            cd "$STAGING" && zip -r "../$ARCHIVE" . && cd ..
+          else
+            ARCHIVE="squad-$TARGET.tar.gz"
+            cp "target/$TARGET/release/squad" "$STAGING/"
+            for f in README.md LICENSE CHANGELOG.md; do
+              [ -f "$f" ] && cp "$f" "$STAGING/"
+            done
+            tar -czf "$ARCHIVE" -C "$STAGING" .
+          fi
 
-          tar -czf "$ARCHIVE" -C "$STAGING" .
           echo "archive=$ARCHIVE" >> "$GITHUB_OUTPUT"
-
-          # Generate per-file checksum (used later for aggregation)
-          shasum -a 256 "$ARCHIVE" > "$ARCHIVE.sha256"
-          echo "checksum=$ARCHIVE.sha256" >> "$GITHUB_OUTPUT"
-
-      - name: Create archive (.zip)
-        if: matrix.archive-format == 'zip'
-        id: archive
-        shell: pwsh
-        run: |
-          $archive = "squad-${{ matrix.target }}.zip"
-          $staging = "staging-${{ matrix.target }}"
-
-          New-Item -ItemType Directory -Force -Path $staging | Out-Null
-          Copy-Item "target/${{ matrix.target }}/release/squad.exe" "$staging/"
-
-          foreach ($f in @("README.md", "LICENSE", "CHANGELOG.md")) {
-            if (Test-Path $f) {
-              Copy-Item $f $staging/
-            }
-          }
-
-          Compress-Archive -Path "$staging/*" -DestinationPath $archive -Force
-          Add-Content -Path $env:GITHUB_OUTPUT -Value "archive=$archive"
-
-          $hash = (Get-FileHash -Algorithm SHA256 $archive).Hash.ToLower()
-          Set-Content -Path "$archive.sha256" -Value "$hash  $archive"
-          Add-Content -Path $env:GITHUB_OUTPUT -Value "checksum=$archive.sha256"
 
       - name: Upload archive to release
         shell: bash
