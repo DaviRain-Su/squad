@@ -167,7 +167,8 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release upload "${{ needs.create-release.outputs.tag }}" \
-            "${{ steps.archive.outputs.archive }}"
+            "${{ steps.archive.outputs.archive }}" \
+            --clobber
 
   # ---------------------------------------------------------------------------
   # 3. After all builds complete, generate a combined SHA256SUMS file
