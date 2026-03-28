@@ -283,7 +283,9 @@ fn test_rejoin_same_id_does_not_receive_old_unread_messages() {
         .args(["receive", "worker"])
         .assert()
         .success()
-        .stdout(predicate::str::contains("No new messages."));
+        .stdout(predicate::str::contains(
+            "No new messages. Run `squad receive worker` again to keep listening.",
+        ));
 }
 
 /// Clean command removes state

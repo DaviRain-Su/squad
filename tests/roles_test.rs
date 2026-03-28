@@ -16,6 +16,15 @@ fn test_load_builtin_role() {
 }
 
 #[test]
+fn test_builtin_roles_recommend_non_blocking_receive() {
+    for role in BUILTIN_ROLES {
+        let prompt = default_role_prompt(role).unwrap();
+        assert!(prompt.contains("squad receive"));
+        assert!(!prompt.contains("--wait"));
+    }
+}
+
+#[test]
 fn test_load_custom_role_from_disk() {
     let tmp = TempDir::new().unwrap();
     let roles_dir = tmp.path().join(".squad").join("roles");

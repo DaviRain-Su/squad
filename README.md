@@ -68,7 +68,7 @@ squad init
 /squad inspector    # terminal 3
 ```
 
-That's it. Each agent joins, reads its role instructions, and enters a work loop waiting for messages. The manager breaks down your goal and assigns tasks to workers.
+That's it. Each agent joins, reads its role instructions, and enters a work loop that checks for messages. The manager breaks down your goal and assigns tasks to workers.
 
 ## Usage Flow
 
@@ -80,12 +80,12 @@ You (human)
   │     breaks it into tasks, assigns to workers.
   │
   ├── Terminal 2: /squad worker
-  │     Worker joins, waits for tasks via squad receive --wait,
+  │     Worker joins, checks for tasks via squad receive,
   │     executes assigned work, reports back.
   │
   └── Terminal 3: /squad worker
         Auto-assigned as worker-2 (ID conflict resolved automatically).
-        Same behavior — waits, executes, reports.
+        Same behavior — checks, executes, reports.
 ```
 
 Multiple agents with the same role get unique IDs automatically (`worker`, `worker-2`, `worker-3`).
@@ -98,10 +98,10 @@ Multiple agents with the same role get unique IDs automatically (`worker`, `work
 | `squad join <id> [--role <role>]` | Join as agent (auto-suffixes if ID is taken) |
 | `squad leave <id>` | Remove agent |
 | `squad agents` | List online agents |
-| `squad send <from> <to> <message>` | Send message (`@all` to broadcast) |
-| `squad receive <id> [--wait]` | Check inbox (`--wait` blocks until message arrives) |
+| `squad send <from> <to> <message>` | Send message (`@all` to broadcast, or `squad send --file <path-or-> <from> <to>` to read from file/stdin) |
+| `squad receive <id> [--wait]` | Check inbox (`--wait` is for manual/debug use) |
 | `squad pending` | Show all unread messages |
-| `squad history [agent]` | Show all messages including read |
+| `squad history [agent] [--from <id>] [--to <id>] [--since <RFC3339\|unix-seconds>]` | Show timestamped message history with optional filters |
 | `squad roles` | List available roles |
 | `squad teams` | List available teams |
 | `squad team <name>` | Show team template |
@@ -143,13 +143,13 @@ Terminal 1 (manager)          Terminal 2 (worker)          Terminal 3 (worker-2)
 │                      │      │ (auto-ID: worker)    │      │ (auto-ID: worker-2)  │
 │                      │      │                      │      │                      │
 │ squad send manager   │─────>│ squad receive worker │      │                      │
-│   worker "task A"    │      │   --wait             │      │                      │
+│   worker "task A"    │      │                      │      │                      │
 │                      │      │                      │      │                      │
 │ squad send manager   │──────────────────────────────────>│ squad receive         │
-│   worker-2 "task B"  │      │                      │      │   worker-2 --wait    │
+│   worker-2 "task B"  │      │                      │      │   worker-2           │
 │                      │      │                      │      │                      │
 │ squad receive manager│<─────│ squad send worker    │      │                      │
-│   --wait             │      │   manager "done A"   │      │                      │
+│                      │      │   manager "done A"   │      │                      │
 │                      │      │                      │      │                      │
 │                      │<──────────────────────────────────│ squad send worker-2   │
 │                      │      │                      │      │   manager "done B"   │
@@ -160,15 +160,15 @@ All messages flow through SQLite — no daemon, no sockets, no background proces
 
 ### Message Flow
 
-Agents use `squad receive --wait` to block until messages arrive:
+Agents should use one-shot `squad receive` checks inside their work loop:
 
 ```
 Agent joins
-  → squad receive <id> --wait          ← blocks until message arrives
+  → squad receive <id>                 ← checks once and returns
   → receives task from manager
   → executes the task
   → squad send <id> manager "done: summary..."
-  → squad receive <id> --wait          ← blocks again for next task
+  → squad receive <id>                 ← checks again when ready
 ```
 
 ### ID Auto-Suffix

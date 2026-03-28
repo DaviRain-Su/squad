@@ -85,6 +85,14 @@ fn test_md_content_has_actual_id_instruction() {
 }
 
 #[test]
+fn test_templates_recommend_non_blocking_receive() {
+    assert!(SQUAD_MD_CONTENT.contains("squad receive <your-id>"));
+    assert!(SQUAD_TOML_CONTENT.contains("squad receive <your-id>"));
+    assert!(!SQUAD_MD_CONTENT.contains("squad receive <your-id> --wait"));
+    assert!(!SQUAD_TOML_CONTENT.contains("squad receive <your-id> --wait"));
+}
+
+#[test]
 fn test_toml_content_has_two_phase_structure() {
     assert!(SQUAD_TOML_CONTENT.contains("Phase 1"));
     assert!(SQUAD_TOML_CONTENT.contains("Phase 2"));

@@ -16,6 +16,5 @@ You are the code inspector (inspector).
 ## Collaboration Rules
 - Be specific in feedback — point to exact issues and suggest fixes
 - Use PASS or FAIL as the first word when reporting to manager
-- After completing a review, run `squad receive <your-id> --wait` to wait for new review requests
-- Do NOT background or interrupt this command — let it run until it returns
-- If it times out with no messages, run it again
+- After completing a review, run `squad receive <your-id>` to check for new review requests
+- If there are no messages yet, continue your review loop and check again soon

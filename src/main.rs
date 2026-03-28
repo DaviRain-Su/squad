@@ -1,4 +1,5 @@
 use anyhow::{bail, Context, Result};
+use chrono::TimeZone;
 use std::path::{Path, PathBuf};
 
 fn main() -> Result<()> {
@@ -34,18 +35,13 @@ fn main() -> Result<()> {
         }
         "agents" => cmd_agents(),
         "send" => {
-            let from = args.next().unwrap_or_default();
-            let to = args.next().unwrap_or_default();
-            let message: String = args.collect::<Vec<_>>().join(" ");
-            if from.is_empty() || to.is_empty() || message.is_empty() {
-                bail!("Usage: squad send <from> <to> <message>");
-            }
+            let (from, to, message) = parse_send_args(args.collect())?;
             cmd_send(&from, &to, &message)
         }
         "receive" => {
             let id = args.next().unwrap_or_default();
             if id.is_empty() {
-                bail!("Usage: squad receive <id> [--wait] [--timeout <secs>]");
+                bail!("Usage: squad receive <id> [--wait [--timeout <secs>]]");
             }
             let mut wait = false;
             let mut timeout_secs: u64 = 3600;
@@ -70,8 +66,8 @@ fn main() -> Result<()> {
         }
         "pending" => cmd_pending(),
         "history" => {
-            let agent = args.next();
-            cmd_history(agent.as_deref())
+            let options = parse_history_args(args.collect())?;
+            cmd_history(&options)
         }
         "roles" => cmd_roles(),
         "teams" => cmd_teams(),
@@ -100,6 +96,126 @@ fn main() -> Result<()> {
 }
 
 // --- Helpers ---
+
+fn parse_send_args(args: Vec<String>) -> Result<(String, String, String)> {
+    if args.first().map(String::as_str) == Some("--file") {
+        if args.len() != 4 {
+            bail!("Usage: squad send <from> <to> <message>\n   or: squad send --file <path-or-> <from> <to>");
+        }
+        let message = read_send_content(&args[1])?;
+        return Ok((args[2].clone(), args[3].clone(), message));
+    }
+
+    if args.len() < 3 {
+        bail!("Usage: squad send <from> <to> <message>\n   or: squad send --file <path-or-> <from> <to>");
+    }
+
+    let from = args[0].clone();
+    let to = args[1].clone();
+    let message = args[2..].join(" ");
+    if message.is_empty() {
+        bail!("Usage: squad send <from> <to> <message>\n   or: squad send --file <path-or-> <from> <to>");
+    }
+    Ok((from, to, message))
+}
+
+#[derive(Default)]
+struct HistoryOptions {
+    agent: Option<String>,
+    from: Option<String>,
+    to: Option<String>,
+    since: Option<i64>,
+}
+
+fn parse_history_args(args: Vec<String>) -> Result<HistoryOptions> {
+    let mut options = HistoryOptions::default();
+    let mut i = 0;
+    while i < args.len() {
+        match args[i].as_str() {
+            "--from" => {
+                let value = args.get(i + 1).context("--from requires an agent ID")?;
+                options.from = Some(value.clone());
+                i += 2;
+            }
+            "--to" => {
+                let value = args.get(i + 1).context("--to requires an agent ID")?;
+                options.to = Some(value.clone());
+                i += 2;
+            }
+            "--since" => {
+                let value = args
+                    .get(i + 1)
+                    .context("--since requires an RFC3339 timestamp or unix seconds")?;
+                options.since = Some(parse_since(value)?);
+                i += 2;
+            }
+            value if value.starts_with("--") => {
+                bail!("unknown history flag: {value}");
+            }
+            value => {
+                if options.agent.is_some() {
+                    bail!("Usage: squad history [agent] [--from <id>] [--to <id>] [--since <RFC3339|unix-seconds>]");
+                }
+                options.agent = Some(value.to_string());
+                i += 1;
+            }
+        }
+    }
+    Ok(options)
+}
+
+fn parse_since(value: &str) -> Result<i64> {
+    if let Ok(ts) = value.parse::<i64>() {
+        return Ok(ts);
+    }
+    let dt = chrono::DateTime::parse_from_rfc3339(value)
+        .with_context(|| format!("invalid --since value: {value}"))?;
+    Ok(dt.timestamp())
+}
+
+fn format_history_timestamp(timestamp: i64) -> String {
+    chrono::Utc
+        .timestamp_opt(timestamp, 0)
+        .single()
+        .map(|dt| dt.to_rfc3339_opts(chrono::SecondsFormat::Secs, true))
+        .unwrap_or_else(|| timestamp.to_string())
+}
+
+fn format_history_entry(msg: &squad::store::MessageRecord) -> String {
+    let marker = if msg.read { "  " } else { "* " };
+    let prefix = format!(
+        "{marker}[{}] {} -> {}: ",
+        format_history_timestamp(msg.created_at),
+        msg.from_agent,
+        msg.to_agent
+    );
+    let mut lines = msg.content.lines();
+    let first = lines.next().unwrap_or_default();
+    let mut rendered = format!("{prefix}{first}");
+    for line in lines {
+        rendered.push('\n');
+        rendered.push_str("  | ");
+        rendered.push_str(line);
+    }
+    rendered
+}
+
+fn read_send_content(path: &str) -> Result<String> {
+    let content = if path == "-" {
+        let mut stdin = std::io::stdin();
+        let mut content = String::new();
+        use std::io::Read;
+        stdin.read_to_string(&mut content)?;
+        content
+    } else {
+        std::fs::read_to_string(path)
+            .with_context(|| format!("failed to read message file: {path}"))?
+    };
+    if content.is_empty() {
+        bail!("message content is empty");
+    }
+    Ok(content)
+}
 
 fn find_workspace() -> Result<PathBuf> {
     let mut dir = std::env::current_dir()?;
@@ -229,6 +345,7 @@ fn cmd_agents() -> Result<()> {
 fn cmd_send(from: &str, to: &str, content: &str) -> Result<()> {
     let workspace = find_workspace()?;
     let store = open_store(&workspace)?;
+    let now = chrono::Utc::now().timestamp();
     ensure_agent_exists(&store, from)?;
     check_session(&workspace, &store, from)?;
     store.touch_agent(from)?;
@@ -239,11 +356,60 @@ fn cmd_send(from: &str, to: &str, content: &str) -> Result<()> {
             recipients.len(),
             recipients.join(", ")
         );
+        if let Some(warning) = stale_broadcast_warning(&store.list_agents()?, &recipients, now) {
+            println!("{warning}");
+        }
     } else {
         store.send_message_checked(from, to, content)?;
         println!("Sent to {to}.");
+        if let Some(agent) = store
+            .list_agents()?
+            .into_iter()
+            .find(|agent| agent.id == to)
+        {
+            if let Some(warning) = stale_direct_warning(&agent, now) {
+                println!("{warning}");
+            }
+        }
     }
     Ok(())
+}
+
+fn stale_minutes(last_seen: Option<i64>, now: i64) -> Option<i64> {
+    let ago = now - last_seen?;
+    if ago >= 600 {
+        Some(ago / 60)
+    } else {
+        None
+    }
+}
+
+fn stale_direct_warning(agent: &squad::store::AgentRecord, now: i64) -> Option<String> {
+    let minutes = stale_minutes(agent.last_seen, now)?;
+    Some(format!(
+        "Warning: {} is stale (last seen {}m ago). Message was queued but may not be seen soon.",
+        agent.id, minutes
+    ))
+}
+
+fn stale_broadcast_warning(
+    agents: &[squad::store::AgentRecord],
+    recipients: &[String],
+    now: i64,
+) -> Option<String> {
+    let stale: Vec<String> = agents
+        .iter()
+        .filter(|agent| recipients.iter().any(|recipient| recipient == &agent.id))
+        .filter_map(|agent| {
+            let minutes = stale_minutes(agent.last_seen, now)?;
+            Some(format!("{} ({}m ago)", agent.id, minutes))
+        })
+        .collect();
+    if stale.is_empty() {
+        None
+    } else {
+        Some(format!("Warning: stale recipients: {}.", stale.join(", ")))
+    }
 }
 
 fn cmd_receive(agent: &str, wait: bool, timeout_secs: u64) -> Result<()> {
@@ -277,7 +443,9 @@ fn cmd_receive(agent: &str, wait: bool, timeout_secs: u64) -> Result<()> {
                 }
             }
             if std::time::Instant::now() > deadline {
-                println!("No new messages (timed out after {timeout_secs}s).");
+                println!(
+                    "No new messages (timed out after {timeout_secs}s). Run `squad receive {agent}` again to keep listening."
+                );
                 return Ok(());
             }
             std::thread::sleep(std::time::Duration::from_millis(500));
@@ -285,7 +453,7 @@ fn cmd_receive(agent: &str, wait: bool, timeout_secs: u64) -> Result<()> {
     } else {
         let messages = store.receive_messages(agent)?;
         if messages.is_empty() {
-            println!("No new messages.");
+            println!("No new messages. Run `squad receive {agent}` again to keep listening.");
         } else {
             print_messages(&messages, Some(agent));
         }
@@ -317,19 +485,38 @@ fn cmd_pending() -> Result<()> {
     Ok(())
 }
 
-fn cmd_history(agent_id: Option<&str>) -> Result<()> {
+fn cmd_history(options: &HistoryOptions) -> Result<()> {
     let workspace = find_workspace()?;
     let store = open_store(&workspace)?;
-    let messages = store.all_messages(agent_id)?;
+    let messages = store
+        .all_messages(options.agent.as_deref())?
+        .into_iter()
+        .filter(|msg| {
+            options
+                .from
+                .as_ref()
+                .map(|from| msg.from_agent == *from)
+                .unwrap_or(true)
+        })
+        .filter(|msg| {
+            options
+                .to
+                .as_ref()
+                .map(|to| msg.to_agent == *to)
+                .unwrap_or(true)
+        })
+        .filter(|msg| {
+            options
+                .since
+                .map(|since| msg.created_at >= since)
+                .unwrap_or(true)
+        })
+        .collect::<Vec<_>>();
     if messages.is_empty() {
         println!("No message history.");
     } else {
         for msg in &messages {
-            let marker = if msg.read { "  " } else { "* " };
-            println!(
-                "{marker}{} -> {}: {}",
-                msg.from_agent, msg.to_agent, msg.content
-            );
+            println!("{}", format_history_entry(msg));
         }
     }
     Ok(())
@@ -442,10 +629,11 @@ COMMANDS
   squad join <id> [--role <role>]            Join as agent (role defaults to id)
   squad leave <id>                           Remove agent
   squad agents                               List online agents
-  squad send <from> <to> <message>           Send message (use @all to broadcast)
-  squad receive <id> [--wait] [--timeout N]  Check inbox (--wait blocks until message arrives)
+  squad send <from> <to> <message>           Send message (`squad send --file <path-or-> <from> <to>` reads from file/stdin)
+  squad receive <id> [--wait] [--timeout N]  Check inbox once (`--wait --timeout N` is for manual/debug use)
   squad pending                              Show all unread messages
-  squad history [agent]                      Show all messages (including read)
+  squad history [agent] [--from <id>] [--to <id>] [--since <RFC3339|unix-seconds>]
+                                             Show messages with timestamps and optional filters
   squad roles                                List available roles
   squad teams                                List available teams
   squad team <name>                          Show team template
@@ -458,7 +646,7 @@ QUICK START
   2. squad join manager --role manager        Join as manager in terminal 1
   3. squad join worker --role worker          Join as worker in terminal 2
   4. squad send manager worker "task..."      Manager assigns task
-  5. squad receive worker                     Worker checks for task
+  5. squad receive worker                     Worker checks once for tasks
   6. squad send worker manager "done..."      Worker reports back
 
 HOW TO PARTICIPATE
@@ -466,11 +654,11 @@ HOW TO PARTICIPATE
   1. squad join <role> --role <role>          Register and read role instructions
   2. Do your work as instructed by the role
   3. squad send <your-id> <to> "result"       Report results
-  4. squad receive <your-id>                  Check for next task or feedback
+  4. squad receive <your-id>                  Check once for next task or feedback
 
 EXAMPLES
   squad send manager worker "implement auth module with JWT"
   squad send manager @all "API contract updated, rebase your work"
   squad receive worker
-  squad history worker
+  squad history worker --from manager --since 2024-01-02T00:00:00Z
 "#;

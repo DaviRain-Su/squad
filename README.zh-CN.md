@@ -70,7 +70,7 @@ squad init
 /squad inspector    # 终端 3
 ```
 
-就这么简单。每个 Agent 加入后会读取角色指令，然后进入工作循环等待消息。Manager 会分析你的目标并分配任务给 Worker。
+就这么简单。每个 Agent 加入后会读取角色指令，然后进入持续检查消息的工作循环。Manager 会分析你的目标并分配任务给 Worker。
 
 ## 使用流程
 
@@ -82,12 +82,12 @@ squad init
   │     拆分任务并分配给 Worker。
   │
   ├── 终端 2: /squad worker
-  │     Worker 加入，通过 squad receive --wait 等待任务，
+  │     Worker 加入，通过 squad receive 检查任务，
   │     执行分配的工作，汇报结果。
   │
   └── 终端 3: /squad worker
         自动分配为 worker-2（ID 冲突自动解决）。
-        同样的行为 — 等待、执行、汇报。
+        同样的行为 — 检查、执行、汇报。
 ```
 
 相同角色的多个 Agent 会自动获得唯一 ID（`worker`、`worker-2`、`worker-3`）。
@@ -100,10 +100,10 @@ squad init
 | `squad join <id> [--role <role>]` | 以 Agent 身份加入（ID 冲突时自动添加后缀） |
 | `squad leave <id>` | 移除 Agent |
 | `squad agents` | 列出在线 Agent |
-| `squad send <from> <to> <message>` | 发送消息（`@all` 广播给所有人） |
-| `squad receive <id> [--wait]` | 检查收件箱（`--wait` 阻塞直到消息到达） |
+| `squad send <from> <to> <message>` | 发送消息（`@all` 广播给所有人，或用 `squad send --file <path-or-> <from> <to>` 从文件/标准输入读取内容） |
+| `squad receive <id> [--wait]` | 检查收件箱（`--wait` 仅建议手动调试时使用） |
 | `squad pending` | 查看所有未读消息 |
-| `squad history [agent]` | 查看所有消息历史（含已读） |
+| `squad history [agent] [--from <id>] [--to <id>] [--since <RFC3339\|unix-seconds>]` | 查看带时间戳的消息历史，并支持基础过滤 |
 | `squad roles` | 列出可用角色 |
 | `squad teams` | 列出可用团队 |
 | `squad team <name>` | 查看团队模板 |
@@ -141,13 +141,13 @@ Agent 通过共享的 SQLite 数据库（`.squad/messages.db`）通信。每个 
 │                      │      │ (自动 ID: worker)    │      │ (自动 ID: worker-2)  │
 │                      │      │                      │      │                      │
 │ squad send manager   │─────>│ squad receive worker │      │                      │
-│   worker "任务 A"    │      │   --wait             │      │                      │
+│   worker "任务 A"    │      │                      │      │                      │
 │                      │      │                      │      │                      │
 │ squad send manager   │──────────────────────────────────>│ squad receive         │
-│   worker-2 "任务 B"  │      │                      │      │   worker-2 --wait    │
+│   worker-2 "任务 B"  │      │                      │      │   worker-2           │
 │                      │      │                      │      │                      │
 │ squad receive manager│<─────│ squad send worker    │      │                      │
-│   --wait             │      │   manager "完成 A"   │      │                      │
+│                      │      │   manager "完成 A"   │      │                      │
 │                      │      │                      │      │                      │
 │                      │<──────────────────────────────────│ squad send worker-2   │
 │                      │      │                      │      │   manager "完成 B"   │
@@ -158,15 +158,15 @@ Agent 通过共享的 SQLite 数据库（`.squad/messages.db`）通信。每个 
 
 ### 消息流程
 
-Agent 使用 `squad receive --wait` 阻塞等待消息：
+Agent 应该在工作循环里使用 one-shot `squad receive`：
 
 ```
 Agent 加入
-  → squad receive <id> --wait          ← 阻塞等待消息
+  → squad receive <id>                 ← 检查一次后返回
   → 收到 Manager 分配的任务
   → 执行任务
   → squad send <id> manager "完成：摘要..."
-  → squad receive <id> --wait          ← 再次阻塞等待下一个任务
+  → squad receive <id>                 ← 准备好后再检查一次
 ```
 
 ### ID 自动后缀
