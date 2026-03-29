@@ -215,10 +215,8 @@ pub fn cleanup_commands() -> Vec<(String, PathBuf)> {
             Ok(p) => p,
             Err(_) => continue,
         };
-        if path.exists() {
-            if std::fs::remove_file(&path).is_ok() {
-                removed.push((platform.name.to_string(), path));
-            }
+        if path.exists() && std::fs::remove_file(&path).is_ok() {
+            removed.push((platform.name.to_string(), path));
         }
     }
     removed
@@ -227,14 +225,13 @@ pub fn cleanup_commands() -> Vec<(String, PathBuf)> {
 /// Insert a version marker into template content.
 fn versioned_content(content: &str, version: &str) -> String {
     // For markdown: insert squad-version into frontmatter
-    if content.starts_with("---") {
-        if let Some(end) = content[3..].find("---") {
-            let frontmatter_end = end + 3;
+    if let Some(rest) = content.strip_prefix("---") {
+        if let Some(end) = rest.find("---") {
             return format!(
-                "{}squad-version: {}\n{}",
-                &content[..frontmatter_end],
+                "---{}squad-version: {}\n{}",
+                &rest[..end],
                 version,
-                &content[frontmatter_end..]
+                &rest[end..]
             );
         }
     }
