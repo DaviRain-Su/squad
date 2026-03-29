@@ -53,11 +53,16 @@ Your join arguments: $ARGUMENTS
    **If arguments are empty or missing:**
    Run `squad roles` to list available roles, then ask the user which role they want to join as. Do NOT proceed until the user picks a role.
 
-   **If arguments are provided:**
+   **If arguments look like a role name** (1-2 words, e.g. "cto", "worker worker-2"):
    - First word is your role — this can be ANY string: "cto", "ceo", "manager", "reviewer", etc. It does NOT need to appear in `squad roles` (that list only shows predefined templates).
    - Optional second word is a custom agent ID
    - If no custom ID provided, use the role name as your ID
    - Examples: "manager" → id=manager, role=manager | "worker worker-2" → id=worker-2, role=worker | "cto" → id=cto, role=cto
+
+   **If arguments look like natural language** (e.g. "加入团队，作为管理员", "join as tech lead and review PRs"):
+   - Extract the intended role from the text. Pick a short English role name (e.g. "manager", "reviewer", "cto").
+   - Use that as your role and ID.
+   - If no role can be inferred, ask the user to clarify.
 
 2. Run `squad init` (safe to run — won't overwrite existing workspace).
 
