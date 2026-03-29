@@ -85,11 +85,11 @@ fn test_md_content_has_actual_id_instruction() {
 }
 
 #[test]
-fn test_templates_recommend_non_blocking_receive() {
-    assert!(SQUAD_MD_CONTENT.contains("squad receive <your-id>"));
-    assert!(SQUAD_TOML_CONTENT.contains("squad receive <your-id>"));
-    assert!(!SQUAD_MD_CONTENT.contains("squad receive <your-id> --wait"));
-    assert!(!SQUAD_TOML_CONTENT.contains("squad receive <your-id> --wait"));
+fn test_templates_use_blocking_receive_with_daemon_loop() {
+    assert!(SQUAD_MD_CONTENT.contains("squad receive <your-id> --wait"));
+    assert!(SQUAD_TOML_CONTENT.contains("squad receive <your-id> --wait"));
+    assert!(SQUAD_MD_CONTENT.contains("immediately run step 1 again"));
+    assert!(SQUAD_TOML_CONTENT.contains("immediately run step 1 again"));
 }
 
 #[test]

@@ -83,6 +83,7 @@ fn main() -> Result<()> {
             cmd_setup(target.as_deref())
         }
         "clean" => cmd_clean(),
+        "cleanup" => cmd_cleanup(),
         "help" | "--help" | "-h" => {
             print_usage();
             Ok(())
@@ -275,6 +276,15 @@ fn cmd_init() -> Result<()> {
     let workspace = std::env::current_dir()?;
     squad::init::init_workspace(&workspace)?;
     println!("Initialized squad workspace.");
+
+    // Auto-update outdated slash commands
+    let updated = squad::setup::check_and_update_commands();
+    if !updated.is_empty() {
+        println!("Updated slash commands:");
+        for (name, path) in &updated {
+            println!("  {} → {}", name, path.display());
+        }
+    }
     Ok(())
 }
 
@@ -574,6 +584,19 @@ fn cmd_clean() -> Result<()> {
     Ok(())
 }
 
+fn cmd_cleanup() -> Result<()> {
+    let removed = squad::setup::cleanup_commands();
+    if removed.is_empty() {
+        println!("No slash command files found to remove.");
+    } else {
+        for (name, path) in &removed {
+            println!("  Removed {} → {}", name, path.display());
+        }
+        println!("Cleaned up {} slash command file(s).", removed.len());
+    }
+    Ok(())
+}
+
 fn cmd_setup(target: Option<&str>) -> Result<()> {
     match target {
         Some("--list") => {
@@ -640,6 +663,7 @@ COMMANDS
   squad setup [platform]                      Install /squad slash command for AI tools
   squad setup --list                         List supported platforms
   squad clean                                Clear all state
+  squad cleanup                              Remove installed slash commands from all AI tools
 
 QUICK START
   1. squad init                              Set up workspace

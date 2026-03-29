@@ -76,6 +76,17 @@ class Squad < Formula
     bin.install "squad"
   end
 
+  def post_install
+    system "#{bin}/squad", "setup"
+  end
+
+  def caveats
+    <<~EOS
+      To remove slash commands before uninstalling:
+        squad cleanup
+    EOS
+  end
+
   test do
     assert_match "Usage:", shell_output("#{bin}/squad help")
   end

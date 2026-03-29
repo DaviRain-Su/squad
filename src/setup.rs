@@ -40,22 +40,24 @@ pub const SQUAD_MD_CONTENT: &str = r#"---
 description: Join squad multi-agent collaboration. Usage: /squad <role> [custom-id]
 ---
 
-The user's input: $ARGUMENTS
-
 You are joining a squad multi-agent collaboration team.
+
+Your join arguments: $ARGUMENTS
+
+**IMPORTANT:** Do NOT run `squad $ARGUMENTS` or treat the arguments as a CLI subcommand. Instead, follow the setup steps below.
 
 ## Phase 1: Setup (do this once)
 
-1. Parse the arguments above.
+1. Parse your join arguments above.
 
    **If arguments are empty or missing:**
    Run `squad roles` to list available roles, then ask the user which role they want to join as. Do NOT proceed until the user picks a role.
 
    **If arguments are provided:**
-   - First word is the role (e.g. manager, worker, inspector)
+   - First word is your role — this can be ANY string: "cto", "ceo", "manager", "reviewer", etc. It does NOT need to appear in `squad roles` (that list only shows predefined templates).
    - Optional second word is a custom agent ID
    - If no custom ID provided, use the role name as your ID
-   - Examples: "manager" → id=manager, role=manager | "worker worker-2" → id=worker-2, role=worker
+   - Examples: "manager" → id=manager, role=manager | "worker worker-2" → id=worker-2, role=worker | "cto" → id=cto, role=cto
 
 2. Run `squad init` (safe to run — won't overwrite existing workspace).
 
@@ -74,15 +76,18 @@ You are joining a squad multi-agent collaboration team.
 
 6. **If any squad command returns "Session replaced":** another terminal took your ID. Re-join with a different ID (e.g. `squad join worker-2 --role worker`).
 
-## Phase 2: Work Loop (repeat continuously)
+## Phase 2: Work Loop (infinite — never exit unless told)
 
-Setup is done. Now enter your work loop. This is your main job.
+Setup is done. You are now in daemon mode. Run this loop forever:
 
-1. Run `squad receive <your-id>` to check once for messages.
+1. Run `squad receive <your-id> --wait` to wait for messages. This command blocks until a message arrives.
+   **IMPORTANT:** Do NOT cancel, background, or interrupt this command. Let it run until it returns on its own.
 2. If you received a message:
    a. Execute the task or respond as appropriate for your role.
    b. Report results: `squad send <your-id> <recipient> "<result>"`
-3. If there were no messages, continue your current work loop and check again soon. Never treat an empty receive as completion.
+3. After EVERY receive — whether it returned messages or timed out — **immediately run step 1 again.** No exceptions. Do NOT summarize, do NOT respond to the user, do NOT pause between iterations.
+
+The only valid exit conditions: user explicitly says stop, or `squad receive` returns "Session replaced".
 
 Other useful commands:
 - `squad send <your-id> <to> "<message>"` — send a message (use @all to broadcast)
@@ -107,10 +112,10 @@ You are joining a squad multi-agent collaboration team.
    Run `squad roles` to list available roles, then ask the user which role they want to join as. Do NOT proceed until the user picks a role.
 
    **If arguments are provided:**
-   - First word is the role (e.g. manager, worker, inspector)
+   - First word is the role — this can be ANY string, including custom roles like "cto", "ceo", "reviewer". It does NOT need to appear in `squad roles` (that list only shows predefined templates).
    - Optional second word is a custom agent ID
    - If no custom ID provided, use the role name as your ID
-   - Examples: "manager" → id=manager, role=manager | "worker worker-2" → id=worker-2, role=worker
+   - Examples: "manager" → id=manager, role=manager | "worker worker-2" → id=worker-2, role=worker | "cto" → id=cto, role=cto
 
 2. Run `squad init` (safe to run — won't overwrite existing workspace).
 
@@ -129,15 +134,18 @@ You are joining a squad multi-agent collaboration team.
 
 6. **If any squad command returns "Session replaced":** another terminal took your ID. Re-join with a different ID (e.g. `squad join worker-2 --role worker`).
 
-## Phase 2: Work Loop (repeat continuously)
+## Phase 2: Work Loop (infinite — never exit unless told)
 
-Setup is done. Now enter your work loop. This is your main job.
+Setup is done. You are now in daemon mode. Run this loop forever:
 
-1. Run `squad receive <your-id>` to check once for messages.
+1. Run `squad receive <your-id> --wait` to wait for messages. This command blocks until a message arrives.
+   **IMPORTANT:** Do NOT cancel, background, or interrupt this command. Let it run until it returns on its own.
 2. If you received a message:
    a. Execute the task or respond as appropriate for your role.
    b. Report results: `squad send <your-id> <recipient> "<result>"`
-3. If there were no messages, continue your current work loop and check again soon. Never treat an empty receive as completion.
+3. After EVERY receive — whether it returned messages or timed out — **immediately run step 1 again.** No exceptions. Do NOT summarize, do NOT respond to the user, do NOT pause between iterations.
+
+The only valid exit conditions: user explicitly says stop, or `squad receive` returns "Session replaced".
 
 Other useful commands:
 - `squad send <your-id> <to> "<message>"` — send a message (use @all to broadcast)
@@ -146,6 +154,93 @@ Other useful commands:
 - `squad history` — view message history
 """
 "#;
+
+/// The version marker prefix used in generated slash command files.
+const VERSION_MARKER: &str = "squad-version:";
+
+/// Get the current binary version.
+pub fn current_version() -> &'static str {
+    env!("CARGO_PKG_VERSION")
+}
+
+/// Extract the squad-version from an installed slash command file.
+fn extract_version(content: &str) -> Option<&str> {
+    for line in content.lines() {
+        let trimmed = line.trim().trim_start_matches('#').trim();
+        if let Some(rest) = trimmed.strip_prefix(VERSION_MARKER) {
+            return Some(rest.trim());
+        }
+    }
+    None
+}
+
+/// Check installed slash commands and update any that are outdated or missing version markers.
+/// Only updates files that already exist (won't install for new platforms).
+/// Returns list of (platform_name, path) for updated files.
+pub fn check_and_update_commands() -> Vec<(String, PathBuf)> {
+    let version = current_version();
+    let mut updated = Vec::new();
+    for platform in PLATFORMS {
+        let path = match command_path(platform) {
+            Ok(p) => p,
+            Err(_) => continue,
+        };
+        if !path.exists() {
+            continue;
+        }
+        let current = match std::fs::read_to_string(&path) {
+            Ok(c) => c,
+            Err(_) => continue,
+        };
+        let needs_update = match extract_version(&current) {
+            Some(v) => v != version,
+            None => true, // no version marker = definitely outdated
+        };
+        if needs_update {
+            let content = versioned_content(platform.content, version);
+            if install_command(&path, &content).is_ok() {
+                updated.push((platform.name.to_string(), path));
+            }
+        }
+    }
+    updated
+}
+
+/// Remove all installed slash command files.
+/// Returns list of (platform_name, path) for removed files.
+pub fn cleanup_commands() -> Vec<(String, PathBuf)> {
+    let mut removed = Vec::new();
+    for platform in PLATFORMS {
+        let path = match command_path(platform) {
+            Ok(p) => p,
+            Err(_) => continue,
+        };
+        if path.exists() {
+            if std::fs::remove_file(&path).is_ok() {
+                removed.push((platform.name.to_string(), path));
+            }
+        }
+    }
+    removed
+}
+
+/// Insert a version marker into template content.
+fn versioned_content(content: &str, version: &str) -> String {
+    // For markdown: insert squad-version into frontmatter
+    if content.starts_with("---") {
+        if let Some(end) = content[3..].find("---") {
+            let frontmatter_end = end + 3;
+            return format!(
+                "{}squad-version: {}\n{}",
+                &content[..frontmatter_end],
+                version,
+                &content[frontmatter_end..]
+            );
+        }
+    }
+    // For TOML: prepend as comment
+    format!("# squad-version: {}\n{}", version, content)
+}
 
 /// Check if a binary exists in PATH.
 pub fn is_installed(binary: &str) -> bool {
@@ -180,10 +275,11 @@ pub fn install_command(path: &Path, content: &str) -> Result<()> {
     Ok(())
 }
 
-/// Install for a specific platform.
+/// Install for a specific platform (with version marker).
 pub fn install_for_platform(platform: &Platform) -> Result<PathBuf> {
     let path = command_path(platform)?;
-    install_command(&path, platform.content)?;
+    let content = versioned_content(platform.content, current_version());
+    install_command(&path, &content)?;
     Ok(path)
 }
 
