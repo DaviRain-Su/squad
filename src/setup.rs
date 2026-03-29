@@ -174,27 +174,28 @@ fn extract_version(content: &str) -> Option<&str> {
     None
 }
 
-/// Check installed slash commands and update any that are outdated or missing version markers.
-/// Only updates files that already exist (won't install for new platforms).
-/// Returns list of (platform_name, path) for updated files.
+/// Check installed slash commands and update any that are outdated, missing version markers,
+/// or missing entirely (for detected platforms).
+/// Returns list of (platform_name, path) for updated/installed files.
 pub fn check_and_update_commands() -> Vec<(String, PathBuf)> {
     let version = current_version();
     let mut updated = Vec::new();
     for platform in PLATFORMS {
+        if !is_installed(platform.binary) {
+            continue;
+        }
         let path = match command_path(platform) {
             Ok(p) => p,
             Err(_) => continue,
         };
-        if !path.exists() {
-            continue;
-        }
-        let current = match std::fs::read_to_string(&path) {
-            Ok(c) => c,
-            Err(_) => continue,
-        };
-        let needs_update = match extract_version(&current) {
-            Some(v) => v != version,
-            None => true, // no version marker = definitely outdated
+        let needs_update = if path.exists() {
+            let current = std::fs::read_to_string(&path).unwrap_or_default();
+            match extract_version(&current) {
+                Some(v) => v != version,
+                None => true,
+            }
+        } else {
+            true // file missing = needs install
         };
         if needs_update {
             let content = versioned_content(platform.content, version);
