@@ -101,12 +101,17 @@ squad init
 
 | 命令 | 说明 |
 |------|------|
-| `squad init` | 初始化工作区，创建 `.squad/`，将 `.squad/` 加入 `.gitignore`，并在缺失时向 `CLAUDE.md`、`AGENTS.md`、`GEMINI.md` 追加 squad 说明 |
-| `squad join <id> [--role <role>]` | 以 Agent 身份加入（ID 冲突时自动添加后缀） |
-| `squad leave <id>` | 移除 Agent |
-| `squad agents` | 列出在线 Agent |
-| `squad send <from> <to> <message>` | 发送消息（`@all` 广播给所有人，或用 `squad send --file <path-or-> <from> <to>` 从文件/标准输入读取内容） |
-| `squad receive <id> [--wait]` | 检查收件箱（`--wait` 仅建议手动调试时使用） |
+| `squad init [--refresh-roles]` | 初始化工作区，创建 `.squad/`，将 `.squad/` 加入 `.gitignore`，并在缺失时向 `CLAUDE.md`、`AGENTS.md`、`GEMINI.md` 追加 squad 说明。`--refresh-roles` 只会重写 `.squad/roles/` 下内置的 `manager`/`worker`/`inspector` 文件。 |
+| `squad join <id> [--role <role>] [--client <claude\|gemini\|codex\|opencode>] [--protocol-version <n>]` | 以 Agent 身份加入（ID 冲突时自动添加后缀；省略能力元数据时数据库存 `NULL`） |
+| `squad leave <id>` | 归档 Agent，并保留未读工作 |
+| `squad agents [--all] [--json]` | 列出在线 Agent（`--json` 每行输出一个 JSON 对象，包含原始/生效能力字段和基于协议版本推导的支持布尔值） |
+| `squad send [--task-id <id>] [--reply-to <message-id>] <from> <to> <message>` | 发送普通消息（`@all` 广播给所有人，或用 `squad send [flags] --file <path-or-> <from> <to>` 从文件/标准输入读取内容） |
+| `squad receive <id> [--wait] [--timeout N] [--json]` | 检查收件箱（`--wait --timeout N` 仅建议手动调试时使用；`--json` 每行输出一个 JSON 对象） |
+| `squad task create <from> <to> --title <title> [--body <body>]` | 创建结构化任务分配 |
+| `squad task ack <agent> <task-id>` | 领取排队中的任务 |
+| `squad task complete <agent> <task-id> --summary <text>` | 用结果摘要完成已 ack 的任务 |
+| `squad task requeue <task-id> [--to <agent>]` | 将任务重新排队，并可选地改派给新执行者 |
+| `squad task list [--agent <id>] [--status <status>]` | 按可选过滤条件查看任务 |
 | `squad pending` | 查看所有未读消息 |
 | `squad history [agent] [--from <id>] [--to <id>] [--since <RFC3339\|unix-seconds>]` | 查看带时间戳的消息历史，并支持基础过滤 |
 | `squad roles` | 列出可用角色 |
@@ -131,9 +136,9 @@ squad setup --list    # 查看支持的平台
 | Codex CLI | `codex` | `~/.codex/prompts/squad.md` |
 | OpenCode | `opencode` | `~/.config/opencode/commands/squad.md` |
 
-安装后，在任何执行过 `squad init` 的项目中使用 `/squad <角色>` 即可。
+安装后，在任何执行过 `squad init` 的项目中使用 `/squad <角色>` 即可。生成的 slash 模板会自动带上所属平台的 `client` 值和当前支持的协议版本。
 
-`squad init` 不只是创建 `.squad/`：它还会把 `.squad/` 追加到 `.gitignore`，并在 `CLAUDE.md`、`AGENTS.md`、`GEMINI.md` 尚未包含相关段落时，补上一段简短的 squad 协作说明。
+`squad init` 不只是创建 `.squad/`：它还会把 `.squad/` 追加到 `.gitignore`，并在 `CLAUDE.md`、`AGENTS.md`、`GEMINI.md` 尚未包含相关段落时，补上一段简短的 squad 协作说明。已有内置角色文件默认不会被覆盖，除非你显式运行 `squad init --refresh-roles`。
 
 ## 工作原理
 
@@ -145,17 +150,21 @@ Agent 通过共享的 SQLite 数据库（`.squad/messages.db`）通信。每个 
 │ /squad manager       │      │ /squad worker        │      │ /squad worker        │
 │                      │      │ (自动 ID: worker)    │      │ (自动 ID: worker-2)  │
 │                      │      │                      │      │                      │
-│ squad send manager   │─────>│ squad receive worker │      │                      │
-│   worker "任务 A"    │      │                      │      │                      │
+│ squad task create    │─────>│ squad receive worker │      │                      │
+│   manager worker     │      │                      │      │                      │
+│   "task-a" "详情"    │      │                      │      │                      │
 │                      │      │                      │      │                      │
-│ squad send manager   │──────────────────────────────────>│ squad receive         │
-│   worker-2 "任务 B"  │      │                      │      │   worker-2           │
+│ squad task create    │──────────────────────────────────>│ squad receive         │
+│   manager worker-2   │      │                      │      │   worker-2           │
+│   "task-b" "详情"    │      │                      │      │                      │
 │                      │      │                      │      │                      │
-│ squad receive manager│<─────│ squad send worker    │      │                      │
-│                      │      │   manager "完成 A"   │      │                      │
+│ squad receive manager│<─────│ squad task complete  │      │                      │
+│                      │      │   worker <task-id>   │      │                      │
+│                      │      │   "完成 A"           │      │                      │
 │                      │      │                      │      │                      │
-│                      │<──────────────────────────────────│ squad send worker-2   │
-│                      │      │                      │      │   manager "完成 B"   │
+│                      │<──────────────────────────────────│ squad task complete   │
+│                      │      │                      │      │   worker-2 <task-id> │
+│                      │      │                      │      │   "完成 B"           │
 └─────────────────────┘      └─────────────────────┘      └─────────────────────┘
 ```
 
@@ -163,28 +172,46 @@ Agent 通过共享的 SQLite 数据库（`.squad/messages.db`）通信。每个 
 
 ### 消息流程
 
-Agent 应该在工作循环里使用 one-shot `squad receive`：
+当任务状态需要被显式跟踪时，Agent 应优先使用 `squad task ...`；在能力检查尚未落地前，`squad send` / `squad receive` 仍然是自由协作的兜底路径。工作循环里仍建议使用 one-shot `squad receive`：
 
 ```
 Agent 加入
   → squad receive <id>                 ← 检查一次后返回
   → 收到 Manager 分配的任务
+  → squad task ack <id> <task-id>
   → 执行任务
-  → squad send <id> manager "完成：摘要..."
+  → squad task complete <id> <task-id> --summary "完成：摘要..."
   → squad receive <id>                 ← 准备好后再检查一次
 ```
+
+`squad receive <id> --wait --timeout <secs>` 仍然保留，适合手动排查或调试；默认推荐仍然是 one-shot `receive`。
 
 ### ID 自动后缀
 
 当多个 Agent 使用相同 ID 加入时，squad 自动分配唯一 ID：
 
 ```bash
-squad join worker    # → Joined as worker
-squad join worker    # → ID 'worker' was taken. Joined as worker-2
-squad join worker    # → ID 'worker' was taken. Joined as worker-3
+squad join worker --role worker --client codex --protocol-version 2
+# → Joined as worker
+
+squad join worker --role worker --client opencode --protocol-version 2
+# → ID 'worker' was taken. Joined as worker-2
 ```
 
 这是服务端原子操作（`INSERT OR IGNORE`），即使多个终端同时加入也不会冲突。
+
+## Agent 能力元数据
+
+`squad join` 现在可以选择性记录 Agent 的能力元数据：
+
+```bash
+squad join worker --role worker --client codex --protocol-version 2
+```
+
+- 如果省略 `--client` 或 `--protocol-version`，数据库中对应字段会存为 `NULL`。
+- `squad agents` 的人类可读输出会使用生效后的 fallback 视图，因此 legacy 记录也会显示为 `client: unknown, protocol: 1`。
+- `squad agents --json` 会暴露 `client_type_raw`、`protocol_version_raw`、`effective_client_type`、`effective_protocol_version`、`supports_task_commands`、`supports_json_receive`。
+- 当前阶段里，`supports_task_commands` 和 `supports_json_receive` 都只根据生效后的协议版本推导，阈值为 `>= 2`。
 
 ## 角色模板
 
@@ -200,6 +227,8 @@ squad join worker    # → ID 'worker' was taken. Joined as worker-3
 echo "你是数据库专家..." > .squad/roles/dba.md
 squad join db-expert --role dba
 ```
+
+如果 `.squad/roles/` 里的内置角色模板和当前内置默认值发生漂移，可运行 `squad init --refresh-roles`，它只会刷新 `manager.md`、`worker.md`、`inspector.md`，不会触碰自定义角色文件。
 
 ## 团队模板
 
@@ -224,6 +253,11 @@ roles:
 向所有 Agent 发送消息：
 
 ```bash
+squad task create manager worker --title "auth-module" --body "实现 JWT 登录模块"
+squad task ack worker <task-id>
+squad task complete worker <task-id> --summary "JWT 登录已完成"
+squad send --task-id <task-id> inspector worker "请继续检查边界场景"
+squad receive worker --json
 squad send manager @all "API 接口已更新，请更新你们的实现"
 ```
 

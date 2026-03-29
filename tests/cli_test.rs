@@ -1,8 +1,26 @@
 use assert_cmd::Command;
 use predicates::prelude::*;
 use rusqlite::Connection;
+use serde_json::Value;
+use squad::setup::{command_content, current_version, PLATFORMS};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tempfile::TempDir;
+
+#[cfg(unix)]
+fn make_executable(path: &std::path::Path) {
+    use std::os::unix::fs::PermissionsExt;
+
+    let mut permissions = std::fs::metadata(path).unwrap().permissions();
+    permissions.set_mode(0o755);
+    std::fs::set_permissions(path, permissions).unwrap();
+}
+
+fn create_fake_binary(dir: &std::path::Path, name: &str) {
+    let path = dir.join(name);
+    std::fs::write(&path, "#!/bin/sh\nexit 0\n").unwrap();
+    #[cfg(unix)]
+    make_executable(&path);
+}
 
 fn squad(workspace: &std::path::Path) -> Command {
     let mut cmd = Command::cargo_bin("squad").unwrap();
@@ -34,6 +52,38 @@ fn set_message_timestamp(workspace: &std::path::Path, content: &str, created_at:
     .unwrap();
 }
 
+fn first_task_id(workspace: &std::path::Path) -> String {
+    let db = workspace.join(".squad").join("messages.db");
+    let conn = Connection::open(db).unwrap();
+    conn.query_row(
+        "SELECT id FROM tasks ORDER BY created_at, id LIMIT 1",
+        [],
+        |row| row.get(0),
+    )
+    .unwrap()
+}
+
+fn message_id_by_content(workspace: &std::path::Path, content: &str) -> i64 {
+    let db = workspace.join(".squad").join("messages.db");
+    let conn = Connection::open(db).unwrap();
+    conn.query_row(
+        "SELECT id FROM messages WHERE content = ?1 ORDER BY created_at, id LIMIT 1",
+        [content],
+        |row| row.get(0),
+    )
+    .unwrap()
+}
+
+fn path_with_fake_binary(tmp: &TempDir, binary: &str) -> String {
+    let bin_dir = tmp.path().join("bin");
+    std::fs::create_dir_all(&bin_dir).unwrap();
+    create_fake_binary(&bin_dir, binary);
+    match std::env::var("PATH") {
+        Ok(existing) => format!("{}:{}", bin_dir.display(), existing),
+        Err(_) => bin_dir.display().to_string(),
+    }
+}
+
 #[test]
 fn test_init() {
     let tmp = TempDir::new().unwrap();
@@ -42,6 +92,31 @@ fn test_init() {
         .assert()
         .success()
         .stdout(predicate::str::contains("Initialized"));
+}
+
+#[test]
+fn test_init_refresh_roles_updates_builtin_files_only() {
+    let tmp = TempDir::new().unwrap();
+    squad(tmp.path()).arg("init").assert().success();
+
+    let roles_dir = tmp.path().join(".squad").join("roles");
+    std::fs::write(roles_dir.join("manager.md"), "stale manager").unwrap();
+    std::fs::write(roles_dir.join("custom.md"), "keep custom").unwrap();
+
+    squad(tmp.path())
+        .args(["init", "--refresh-roles"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Initialized"));
+
+    assert_ne!(
+        std::fs::read_to_string(roles_dir.join("manager.md")).unwrap(),
+        "stale manager"
+    );
+    assert_eq!(
+        std::fs::read_to_string(roles_dir.join("custom.md")).unwrap(),
+        "keep custom"
+    );
 }
 
 #[test]
@@ -72,6 +147,208 @@ fn test_join_with_role_flag() {
 }
 
 #[test]
+fn test_join_accepts_capability_metadata_flags() {
+    let tmp = TempDir::new().unwrap();
+    squad(tmp.path()).arg("init").assert().success();
+
+    squad(tmp.path())
+        .args([
+            "join",
+            "worker",
+            "--role",
+            "worker",
+            "--client",
+            "codex",
+            "--protocol-version",
+            "2",
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Joined as worker"));
+
+    let db = tmp.path().join(".squad").join("messages.db");
+    let conn = Connection::open(db).unwrap();
+    let row: (Option<String>, Option<i64>) = conn
+        .query_row(
+            "SELECT client_type, protocol_version FROM agents WHERE id = ?1",
+            ["worker"],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .unwrap();
+    assert_eq!(row.0.as_deref(), Some("codex"));
+    assert_eq!(row.1, Some(2));
+}
+
+#[test]
+fn test_join_rejects_role_flag_without_value() {
+    let tmp = TempDir::new().unwrap();
+    squad(tmp.path()).arg("init").assert().success();
+
+    squad(tmp.path())
+        .args(["join", "worker", "--role"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("--role requires a value"));
+}
+
+#[test]
+fn test_join_rejects_role_flag_followed_by_another_flag() {
+    let tmp = TempDir::new().unwrap();
+    squad(tmp.path()).arg("init").assert().success();
+
+    squad(tmp.path())
+        .args(["join", "worker", "--role", "--client", "codex"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("--role requires a value"));
+}
+
+#[test]
+fn test_join_rejects_client_flag_without_value() {
+    let tmp = TempDir::new().unwrap();
+    squad(tmp.path()).arg("init").assert().success();
+
+    squad(tmp.path())
+        .args(["join", "worker", "--client"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("--client requires a value"));
+}
+
+#[test]
+fn test_join_rejects_client_flag_followed_by_another_flag() {
+    let tmp = TempDir::new().unwrap();
+    squad(tmp.path()).arg("init").assert().success();
+
+    squad(tmp.path())
+        .args(["join", "worker", "--client", "--protocol-version", "2"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("--client requires a value"));
+}
+
+#[test]
+fn test_join_rejects_protocol_flag_without_value() {
+    let tmp = TempDir::new().unwrap();
+    squad(tmp.path()).arg("init").assert().success();
+
+    squad(tmp.path())
+        .args(["join", "worker", "--protocol-version"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains(
+            "--protocol-version requires a value",
+        ));
+}
+
+#[test]
+fn test_join_rejects_protocol_flag_followed_by_another_flag() {
+    let tmp = TempDir::new().unwrap();
+    squad(tmp.path()).arg("init").assert().success();
+
+    squad(tmp.path())
+        .args(["join", "worker", "--protocol-version", "--client", "codex"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains(
+            "--protocol-version requires a value",
+        ));
+}
+
+#[test]
+fn test_agents_json_exposes_effective_capability_fields_and_fallbacks() {
+    let tmp = TempDir::new().unwrap();
+    squad(tmp.path()).arg("init").assert().success();
+
+    squad(tmp.path())
+        .args(["join", "legacy", "--role", "worker"])
+        .assert()
+        .success();
+    squad(tmp.path())
+        .args([
+            "join",
+            "modern",
+            "--role",
+            "worker",
+            "--client",
+            "gemini",
+            "--protocol-version",
+            "2",
+        ])
+        .assert()
+        .success();
+
+    let output = squad(tmp.path())
+        .args(["agents", "--json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let entries: Vec<Value> = String::from_utf8(output)
+        .unwrap()
+        .lines()
+        .map(|line| serde_json::from_str(line).unwrap())
+        .collect();
+
+    let legacy = entries
+        .iter()
+        .find(|entry| entry["id"] == "legacy")
+        .unwrap();
+    assert_eq!(legacy["client_type_raw"], Value::Null);
+    assert_eq!(legacy["protocol_version_raw"], Value::Null);
+    assert_eq!(legacy["effective_client_type"], "unknown");
+    assert_eq!(legacy["effective_protocol_version"], 1);
+    assert_eq!(legacy["supports_task_commands"], false);
+    assert_eq!(legacy["supports_json_receive"], false);
+
+    let modern = entries
+        .iter()
+        .find(|entry| entry["id"] == "modern")
+        .unwrap();
+    assert_eq!(modern["client_type_raw"], "gemini");
+    assert_eq!(modern["protocol_version_raw"], 2);
+    assert_eq!(modern["effective_client_type"], "gemini");
+    assert_eq!(modern["effective_protocol_version"], 2);
+    assert_eq!(modern["supports_task_commands"], true);
+    assert_eq!(modern["supports_json_receive"], true);
+}
+
+#[test]
+fn test_agents_human_output_shows_capability_metadata_when_present() {
+    let tmp = TempDir::new().unwrap();
+    squad(tmp.path()).arg("init").assert().success();
+
+    squad(tmp.path())
+        .args(["join", "legacy", "--role", "worker"])
+        .assert()
+        .success();
+
+    squad(tmp.path())
+        .args([
+            "join",
+            "worker",
+            "--role",
+            "worker",
+            "--client",
+            "opencode",
+            "--protocol-version",
+            "2",
+        ])
+        .assert()
+        .success();
+
+    squad(tmp.path())
+        .arg("agents")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("client: unknown"))
+        .stdout(predicate::str::contains("protocol: 1"))
+        .stdout(predicate::str::contains("client: opencode"))
+        .stdout(predicate::str::contains("protocol: 2"));
+}
+
+#[test]
 fn test_send_and_receive() {
     let tmp = TempDir::new().unwrap();
     squad(tmp.path()).arg("init").assert().success();
@@ -94,7 +371,10 @@ fn test_send_and_receive() {
         .assert()
         .success()
         .stdout(predicate::str::contains("[from manager]"))
-        .stdout(predicate::str::contains("implement auth module"));
+        .stdout(predicate::str::contains("implement auth module"))
+        .stdout(predicate::str::contains(
+            "After processing this message and sending your reply, run `squad receive worker --wait` to continue listening.",
+        ));
 }
 
 #[test]
@@ -307,12 +587,161 @@ fn test_leave() {
     squad(tmp.path())
         .args(["leave", "manager"])
         .assert()
-        .success();
+        .success()
+        .stdout(predicate::str::contains(
+            "manager archived from the squad. Unread work was preserved.",
+        ));
     squad(tmp.path())
         .arg("agents")
         .assert()
         .success()
         .stdout(predicate::str::contains("No agents"));
+}
+
+#[test]
+fn test_leave_nonexistent_agent_fails() {
+    let tmp = TempDir::new().unwrap();
+    squad(tmp.path()).arg("init").assert().success();
+    squad(tmp.path())
+        .args(["leave", "ghost"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("ghost does not exist"));
+}
+
+#[test]
+fn test_leave_archived_agent_fails_with_archived_message() {
+    let tmp = TempDir::new().unwrap();
+    squad(tmp.path()).arg("init").assert().success();
+    squad(tmp.path())
+        .args(["join", "worker"])
+        .assert()
+        .success();
+    squad(tmp.path())
+        .args(["leave", "worker"])
+        .assert()
+        .success();
+
+    squad(tmp.path())
+        .args(["leave", "worker"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("worker is archived"));
+}
+
+#[test]
+fn test_archived_agent_errors_are_distinct_from_nonexistent() {
+    let tmp = TempDir::new().unwrap();
+    squad(tmp.path()).arg("init").assert().success();
+    squad(tmp.path())
+        .args(["join", "manager"])
+        .assert()
+        .success();
+    squad(tmp.path())
+        .args(["join", "worker"])
+        .assert()
+        .success();
+    squad(tmp.path())
+        .args(["leave", "worker"])
+        .assert()
+        .success();
+
+    squad(tmp.path())
+        .args(["send", "manager", "worker", "hello"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("worker is archived"));
+
+    squad(tmp.path())
+        .args(["receive", "worker"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("worker is archived"));
+
+    squad(tmp.path())
+        .args(["send", "manager", "ghost", "hello"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("ghost does not exist"));
+}
+
+#[test]
+fn test_help_describes_leave_as_archive() {
+    let tmp = TempDir::new().unwrap();
+    squad(tmp.path())
+        .arg("help")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(
+            "squad leave <id>                           Archive agent",
+        ));
+}
+
+#[test]
+fn test_readmes_and_manager_role_describe_archive_semantics() {
+    let readme = std::fs::read_to_string("README.md").unwrap();
+    let readme_zh = std::fs::read_to_string("README.zh-CN.md").unwrap();
+    let manager_role = std::fs::read_to_string("src/roles/manager.md").unwrap();
+
+    assert!(readme.contains("| `squad leave <id>` | Archive agent and preserve unread work |"));
+    assert!(readme_zh.contains("| `squad leave <id>` | 归档 Agent，并保留未读工作 |"));
+    assert!(manager_role.contains(
+        "use `squad leave <id>` to archive it, preserve any unread work, and reassign its task to another agent"
+    ));
+}
+
+#[test]
+fn test_agents_hides_archived_by_default_and_shows_them_with_all() {
+    let tmp = TempDir::new().unwrap();
+    squad(tmp.path()).arg("init").assert().success();
+    squad(tmp.path())
+        .args(["join", "manager"])
+        .assert()
+        .success();
+    squad(tmp.path())
+        .args(["join", "worker"])
+        .assert()
+        .success();
+    squad(tmp.path())
+        .args(["leave", "worker"])
+        .assert()
+        .success();
+
+    squad(tmp.path())
+        .arg("agents")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("manager"))
+        .stdout(predicate::str::contains("worker").not());
+
+    squad(tmp.path())
+        .args(["agents", "--all"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("manager"))
+        .stdout(predicate::str::contains("worker"))
+        .stdout(predicate::str::contains("archived"));
+}
+
+#[test]
+fn test_join_reactivates_archived_agent_with_same_id() {
+    let tmp = TempDir::new().unwrap();
+    squad(tmp.path()).arg("init").assert().success();
+    squad(tmp.path())
+        .args(["join", "worker"])
+        .assert()
+        .success();
+    squad(tmp.path())
+        .args(["leave", "worker"])
+        .assert()
+        .success();
+
+    squad(tmp.path())
+        .args(["join", "worker"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Joined as worker"))
+        .stdout(predicate::str::contains("worker-2").not());
 }
 
 #[test]
@@ -336,9 +765,99 @@ fn test_help_describes_wait_as_debug_only() {
         .assert()
         .success()
         .stdout(predicate::str::contains(
-            "Check inbox once (`--wait --timeout N` is for manual/debug use)",
+            "squad receive <id> [--wait] [--timeout N] [--json]",
         ))
+        .stdout(predicate::str::contains(
+            "`--wait` defaults to 86400s; `--wait --timeout N` is for manual/debug use",
+        ))
+        .stdout(predicate::str::contains(
+            "squad task create <from> <to> --title <title> [--body <body>]",
+        ))
+        .stdout(predicate::str::contains("squad init [--refresh-roles]"))
         .stdout(predicate::str::contains("Worker checks once for tasks"));
+}
+
+#[test]
+fn test_readmes_describe_receive_timeout_debug_path() {
+    let readme = std::fs::read_to_string("README.md").unwrap();
+    let readme_zh = std::fs::read_to_string("README.zh-CN.md").unwrap();
+
+    assert!(readme.contains("| `squad receive <id> [--wait] [--timeout N] [--json]` |"));
+    assert!(readme.contains("| `squad task create <from> <to> --title <title> [--body <body>]` |"));
+    assert!(readme.contains("| `squad task complete <agent> <task-id> --summary <text>` |"));
+    assert!(readme.contains("| `squad task list [--agent <id>] [--status <status>]` |"));
+    assert!(readme_zh.contains("| `squad receive <id> [--wait] [--timeout N] [--json]` |"));
+    assert!(
+        readme_zh.contains("| `squad task create <from> <to> --title <title> [--body <body>]` |")
+    );
+    assert!(readme_zh.contains("| `squad task complete <agent> <task-id> --summary <text>` |"));
+    assert!(readme_zh.contains("| `squad task list [--agent <id>] [--status <status>]` |"));
+}
+
+#[test]
+fn test_receive_rejects_unknown_flag() {
+    let tmp = TempDir::new().unwrap();
+    squad(tmp.path()).arg("init").assert().success();
+    squad(tmp.path())
+        .args(["join", "worker"])
+        .assert()
+        .success();
+
+    squad(tmp.path())
+        .args(["receive", "worker", "--bogus"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("unknown receive flag: --bogus"));
+}
+
+#[test]
+fn test_receive_rejects_invalid_timeout_value() {
+    let tmp = TempDir::new().unwrap();
+    squad(tmp.path()).arg("init").assert().success();
+    squad(tmp.path())
+        .args(["join", "worker"])
+        .assert()
+        .success();
+
+    squad(tmp.path())
+        .args(["receive", "worker", "--wait", "--timeout", "nope"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("invalid --timeout value: nope"));
+}
+
+#[test]
+fn test_receive_rejects_timeout_without_wait() {
+    let tmp = TempDir::new().unwrap();
+    squad(tmp.path()).arg("init").assert().success();
+    squad(tmp.path())
+        .args(["join", "worker"])
+        .assert()
+        .success();
+
+    squad(tmp.path())
+        .args(["receive", "worker", "--timeout", "5"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("--timeout requires --wait"));
+}
+
+#[test]
+fn test_role_prompts_prefer_task_commands_with_send_receive_fallback() {
+    let manager_role = std::fs::read_to_string("src/roles/manager.md").unwrap();
+    let worker_role = std::fs::read_to_string("src/roles/worker.md").unwrap();
+    let inspector_role = std::fs::read_to_string("src/roles/inspector.md").unwrap();
+
+    assert!(manager_role.contains(
+        "Prefer `squad task create manager <agent> --title \"<title>\" [--body \"<body>\"]`"
+    ));
+    assert!(manager_role.contains("keep `squad send` / `squad receive` as the fallback path"));
+    assert!(worker_role.contains("Prefer `squad task ack <your-id> <task-id>` and `squad task complete <your-id> <task-id> --summary \"<summary>\"`"));
+    assert!(worker_role.contains("keep `squad send` / `squad receive` as the fallback path"));
+    assert!(inspector_role.contains("Prefer `squad send --task-id <task-id> --reply-to <message-id> <your-id> <worker-id> \"<specific feedback>\"`"));
+    assert!(
+        inspector_role.contains("keep plain `squad send` / `squad receive` as the fallback path")
+    );
 }
 
 #[test]
@@ -585,8 +1104,314 @@ fn test_receive_wait_timeout_suggests_checking_again() {
         .assert()
         .success()
         .stdout(predicate::str::contains(
-            "No new messages (timed out after 0s). Run `squad receive worker` again to keep listening.",
+            "No new messages (timed out after 0s). Run `squad receive worker --wait` to continue listening.",
         ));
+}
+
+#[test]
+fn test_receive_wait_message_includes_continue_listening_prompt() {
+    let tmp = TempDir::new().unwrap();
+    squad(tmp.path()).arg("init").assert().success();
+    squad(tmp.path())
+        .args(["join", "manager"])
+        .assert()
+        .success();
+    squad(tmp.path())
+        .args(["join", "worker"])
+        .assert()
+        .success();
+
+    squad(tmp.path())
+        .args(["send", "manager", "worker", "queued for wait"])
+        .assert()
+        .success();
+
+    squad(tmp.path())
+        .args(["receive", "worker", "--wait"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("queued for wait"))
+        .stdout(predicate::str::contains(
+            "After processing this message and sending your reply, run `squad receive worker --wait` to continue listening.",
+        ));
+}
+
+#[test]
+fn test_task_commands_cover_create_ack_complete_requeue_and_list() {
+    let tmp = TempDir::new().unwrap();
+    squad(tmp.path()).arg("init").assert().success();
+    for agent in ["manager", "worker", "worker-2"] {
+        squad(tmp.path()).args(["join", agent]).assert().success();
+    }
+
+    squad(tmp.path())
+        .args([
+            "task",
+            "create",
+            "manager",
+            "worker",
+            "--title",
+            "auth-module",
+            "--body",
+            "Implement auth module",
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Created task"))
+        .stdout(predicate::str::contains("auth-module"));
+
+    let task_id = first_task_id(tmp.path());
+
+    squad(tmp.path())
+        .args(["task", "list", "--agent", "worker", "--status", "queued"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(&task_id))
+        .stdout(predicate::str::contains(format!("[task {task_id}] queued")))
+        .stdout(predicate::str::contains("assigned_to: worker"))
+        .stdout(predicate::str::contains("lease_owner: unleased"))
+        .stdout(predicate::str::contains("title: auth-module"));
+
+    squad(tmp.path())
+        .args(["task", "ack", "worker", &task_id])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(format!("Acked task {task_id}")));
+
+    squad(tmp.path())
+        .args([
+            "task",
+            "complete",
+            "worker",
+            &task_id,
+            "--summary",
+            "Auth shipped",
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(format!(
+            "Completed task {task_id}"
+        )))
+        .stdout(predicate::str::contains("Auth shipped"));
+
+    squad(tmp.path())
+        .args(["task", "requeue", &task_id, "--to", "worker-2"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(format!("Requeued task {task_id}")))
+        .stdout(predicate::str::contains("worker-2"));
+
+    squad(tmp.path())
+        .args(["task", "list", "--agent", "worker-2", "--status", "queued"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(&task_id))
+        .stdout(predicate::str::contains(format!("[task {task_id}] queued")))
+        .stdout(predicate::str::contains("assigned_to: worker-2"))
+        .stdout(predicate::str::contains("lease_owner: unleased"))
+        .stdout(predicate::str::contains("title: auth-module"));
+}
+
+#[test]
+fn test_receive_text_formats_task_messages_with_metadata() {
+    let tmp = TempDir::new().unwrap();
+    squad(tmp.path()).arg("init").assert().success();
+    for agent in ["manager", "worker"] {
+        squad(tmp.path()).args(["join", agent]).assert().success();
+    }
+
+    squad(tmp.path())
+        .args([
+            "task",
+            "create",
+            "manager",
+            "worker",
+            "--title",
+            "auth-module",
+            "--body",
+            "Implement auth module",
+        ])
+        .assert()
+        .success();
+
+    let task_id = first_task_id(tmp.path());
+
+    squad(tmp.path())
+        .args(["receive", "worker"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(format!(
+            "[task {task_id}] queued from manager"
+        )))
+        .stdout(predicate::str::contains("Title: auth-module"))
+        .stdout(predicate::str::contains("Body: Implement auth module"))
+        .stdout(predicate::str::contains(format!(
+            "Reply: squad send --task-id {task_id} worker manager \"<your response>\""
+        )));
+}
+
+#[test]
+fn test_send_supports_task_id_and_reply_to_metadata() {
+    let tmp = TempDir::new().unwrap();
+    squad(tmp.path()).arg("init").assert().success();
+    for agent in ["manager", "worker"] {
+        squad(tmp.path()).args(["join", agent]).assert().success();
+    }
+
+    squad(tmp.path())
+        .args([
+            "task",
+            "create",
+            "manager",
+            "worker",
+            "--title",
+            "auth-module",
+            "--body",
+            "Implement auth module",
+        ])
+        .assert()
+        .success();
+    let task_id = first_task_id(tmp.path());
+
+    squad(tmp.path())
+        .args(["receive", "worker"])
+        .assert()
+        .success();
+    let assignment_message_id = message_id_by_content(tmp.path(), "auth-module");
+
+    let output = squad(tmp.path())
+        .args([
+            "send",
+            "--task-id",
+            &task_id,
+            "--reply-to",
+            &assignment_message_id.to_string(),
+            "worker",
+            "manager",
+            "Need clarification on auth edge cases",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    assert!(String::from_utf8(output)
+        .unwrap()
+        .contains("Sent to manager."));
+
+    let output = squad(tmp.path())
+        .args(["receive", "manager", "--json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let lines: Vec<Value> = String::from_utf8(output)
+        .unwrap()
+        .lines()
+        .map(|line| serde_json::from_str(line).unwrap())
+        .collect();
+    let first = &lines[0];
+    assert_eq!(first["kind"], "note");
+    assert_eq!(first["task_id"], task_id);
+    assert_eq!(first["reply_to"], assignment_message_id);
+    assert_eq!(first["content"], "Need clarification on auth edge cases");
+}
+
+#[test]
+fn test_receive_json_preserves_mixed_inbox_order_and_task_structure() {
+    let tmp = TempDir::new().unwrap();
+    squad(tmp.path()).arg("init").assert().success();
+    for agent in ["manager", "worker"] {
+        squad(tmp.path()).args(["join", agent]).assert().success();
+    }
+
+    squad(tmp.path())
+        .args(["send", "manager", "worker", "legacy note before task"])
+        .assert()
+        .success();
+    set_message_timestamp(tmp.path(), "legacy note before task", 1_704_067_200);
+
+    squad(tmp.path())
+        .args([
+            "task",
+            "create",
+            "manager",
+            "worker",
+            "--title",
+            "auth-module",
+            "--body",
+            "Implement auth module",
+        ])
+        .assert()
+        .success();
+    set_message_timestamp(tmp.path(), "auth-module", 1_704_067_200);
+    let task_id = first_task_id(tmp.path());
+
+    squad(tmp.path())
+        .args(["send", "manager", "worker", "legacy note after task"])
+        .assert()
+        .success();
+    set_message_timestamp(tmp.path(), "legacy note after task", 1_704_067_200);
+
+    let output = squad(tmp.path())
+        .args(["receive", "worker", "--json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let entries: Vec<Value> = String::from_utf8(output)
+        .unwrap()
+        .lines()
+        .map(|line| serde_json::from_str(line).unwrap())
+        .collect();
+
+    assert_eq!(entries.len(), 3);
+    assert_eq!(entries[0]["kind"], "note");
+    assert_eq!(entries[0]["content"], "legacy note before task");
+
+    assert_eq!(entries[1]["kind"], "task_assigned");
+    assert_eq!(entries[1]["task_id"], task_id);
+    assert_eq!(entries[1]["task"]["id"], task_id);
+    assert_eq!(entries[1]["task"]["title"], "auth-module");
+    assert_eq!(entries[1]["task"]["body"], "Implement auth module");
+    assert_eq!(entries[1]["task"]["status"], "queued");
+
+    assert_eq!(entries[2]["kind"], "note");
+    assert_eq!(entries[2]["content"], "legacy note after task");
+}
+
+#[test]
+fn test_receive_json_empty_inbox_emits_no_objects() {
+    let tmp = TempDir::new().unwrap();
+    squad(tmp.path()).arg("init").assert().success();
+    squad(tmp.path())
+        .args(["join", "worker"])
+        .assert()
+        .success();
+
+    squad(tmp.path())
+        .args(["receive", "worker", "--json"])
+        .assert()
+        .success()
+        .stdout(predicate::str::is_empty());
+}
+
+#[test]
+fn test_receive_wait_json_empty_inbox_emits_no_objects() {
+    let tmp = TempDir::new().unwrap();
+    squad(tmp.path()).arg("init").assert().success();
+    squad(tmp.path())
+        .args(["join", "worker"])
+        .assert()
+        .success();
+
+    squad(tmp.path())
+        .args(["receive", "worker", "--wait", "--timeout", "0", "--json"])
+        .assert()
+        .success()
+        .stdout(predicate::str::is_empty());
 }
 
 #[test]
@@ -604,6 +1429,21 @@ fn test_join_creates_session_file() {
 }
 
 #[test]
+fn test_setup_templates_pass_client_and_protocol_metadata_on_join() {
+    let claude = command_content(PLATFORMS.iter().find(|p| p.name == "claude").unwrap());
+    let codex = command_content(PLATFORMS.iter().find(|p| p.name == "codex").unwrap());
+    let opencode = command_content(PLATFORMS.iter().find(|p| p.name == "opencode").unwrap());
+    let gemini = command_content(PLATFORMS.iter().find(|p| p.name == "gemini").unwrap());
+
+    assert!(claude.contains("--client claude"));
+    assert!(claude.contains("--protocol-version 2"));
+    assert!(codex.contains("--client codex"));
+    assert!(opencode.contains("--client opencode"));
+    assert!(gemini.contains("--client gemini"));
+    assert!(gemini.contains("--protocol-version 2"));
+}
+
+#[test]
 fn test_leave_deletes_session_file() {
     let tmp = TempDir::new().unwrap();
     squad(tmp.path()).arg("init").assert().success();
@@ -617,4 +1457,172 @@ fn test_leave_deletes_session_file() {
         .success();
     let session_path = tmp.path().join(".squad").join("sessions").join("worker");
     assert!(!session_path.exists());
+}
+
+#[test]
+fn test_doctor_reports_template_archived_task_and_protocol_warnings_without_mutating_state() {
+    let tmp = TempDir::new().unwrap();
+    let home = tmp.path().join("home");
+    std::fs::create_dir_all(&home).unwrap();
+    let path_env = path_with_fake_binary(&tmp, "claude");
+
+    squad(tmp.path()).arg("init").assert().success();
+    squad(tmp.path())
+        .args([
+            "join",
+            "manager",
+            "--role",
+            "manager",
+            "--protocol-version",
+            "2",
+        ])
+        .assert()
+        .success();
+    squad(tmp.path())
+        .args(["join", "legacy", "--role", "worker"])
+        .assert()
+        .success();
+    squad(tmp.path())
+        .args([
+            "join",
+            "archived-worker",
+            "--role",
+            "worker",
+            "--protocol-version",
+            "2",
+        ])
+        .assert()
+        .success();
+
+    squad(tmp.path())
+        .args([
+            "task",
+            "create",
+            "manager",
+            "archived-worker",
+            "--title",
+            "pending-task",
+            "--body",
+            "body",
+        ])
+        .assert()
+        .success();
+    let pending_task_id = first_task_id(tmp.path());
+    squad(tmp.path())
+        .args(["leave", "archived-worker"])
+        .assert()
+        .success();
+
+    let template_path = home.join(".claude/commands/squad.md");
+    std::fs::create_dir_all(template_path.parent().unwrap()).unwrap();
+    std::fs::write(
+        &template_path,
+        "# squad-version: 0.0.1\noutdated template\n",
+    )
+    .unwrap();
+    let before_template = std::fs::read_to_string(&template_path).unwrap();
+
+    let db = tmp.path().join(".squad").join("messages.db");
+    let conn = Connection::open(&db).unwrap();
+    let before_last_seen: Option<i64> = conn
+        .query_row(
+            "SELECT last_seen FROM agents WHERE id = 'legacy'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    let before_status: String = conn
+        .query_row(
+            "SELECT status FROM tasks WHERE id = ?1",
+            [&pending_task_id],
+            |row| row.get(0),
+        )
+        .unwrap();
+    drop(conn);
+
+    squad(tmp.path())
+        .arg("doctor")
+        .env("HOME", &home)
+        .env("PATH", &path_env)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(format!(
+            "WARN: slash template claude is outdated (installed=0.0.1, current={}); run squad init or squad setup",
+            current_version()
+        )))
+        .stdout(predicate::str::contains(format!(
+            "WARN: archived agent archived-worker has pending tasks: {}",
+            pending_task_id
+        )))
+        .stdout(predicate::str::contains(
+            "WARN: legacy has effective_protocol_version=1; task commands should fall back to send/receive",
+        ));
+
+    assert_eq!(
+        std::fs::read_to_string(&template_path).unwrap(),
+        before_template
+    );
+    let conn = Connection::open(&db).unwrap();
+    let after_last_seen: Option<i64> = conn
+        .query_row(
+            "SELECT last_seen FROM agents WHERE id = 'legacy'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    let after_status: String = conn
+        .query_row(
+            "SELECT status FROM tasks WHERE id = ?1",
+            [&pending_task_id],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(after_last_seen, before_last_seen);
+    assert_eq!(after_status, before_status);
+}
+
+#[test]
+fn test_doctor_reports_clean_state_and_help_mentions_command() {
+    let tmp = TempDir::new().unwrap();
+    let home = tmp.path().join("home");
+    std::fs::create_dir_all(&home).unwrap();
+    let empty_bin = tmp.path().join("empty_bin");
+    std::fs::create_dir_all(&empty_bin).unwrap();
+
+    squad(tmp.path()).arg("init").assert().success();
+    squad(tmp.path())
+        .args([
+            "join",
+            "modern",
+            "--role",
+            "worker",
+            "--client",
+            "codex",
+            "--protocol-version",
+            "2",
+        ])
+        .assert()
+        .success();
+
+    squad(tmp.path())
+        .arg("doctor")
+        .env("HOME", &home)
+        .env("PATH", empty_bin.to_str().unwrap())
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(
+            "OK: no installed slash templates detected",
+        ))
+        .stdout(predicate::str::contains(
+            "OK: no archived agents with pending tasks",
+        ))
+        .stdout(predicate::str::contains(
+            "OK: all agents meet protocol threshold",
+        ));
+
+    squad(tmp.path())
+        .arg("help")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("squad doctor"));
 }

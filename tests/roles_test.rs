@@ -16,12 +16,35 @@ fn test_load_builtin_role() {
 }
 
 #[test]
-fn test_builtin_roles_recommend_non_blocking_receive() {
+fn test_builtin_roles_recommend_one_shot_receive() {
     for role in BUILTIN_ROLES {
         let prompt = default_role_prompt(role).unwrap();
         assert!(prompt.contains("squad receive"));
-        assert!(!prompt.contains("--wait"));
+        assert!(prompt.contains("manual/debug"));
+        assert!(!prompt.contains("run `squad receive <your-id> --wait`"));
     }
+}
+
+#[test]
+fn test_manager_role_uses_actual_joined_id_pattern() {
+    let prompt = default_role_prompt("manager").unwrap();
+    assert!(prompt.contains("squad receive <your-id>"));
+    assert!(!prompt.contains("squad receive manager"));
+}
+
+#[test]
+fn test_load_role_prefers_refreshed_workspace_builtin_file() {
+    let tmp = TempDir::new().unwrap();
+    squad::init::init_workspace(tmp.path()).unwrap();
+
+    let manager_path = tmp.path().join(".squad").join("roles").join("manager.md");
+    fs::write(&manager_path, "outdated manager instructions").unwrap();
+
+    squad::init::init_workspace_with_options(tmp.path(), true).unwrap();
+
+    let prompt = load_role(tmp.path(), "manager").unwrap();
+    assert_eq!(prompt, default_role_prompt("manager").unwrap());
+    assert_eq!(fs::read_to_string(manager_path).unwrap(), prompt);
 }
 
 #[test]

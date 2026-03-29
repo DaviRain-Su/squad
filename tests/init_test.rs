@@ -42,6 +42,53 @@ fn test_init_is_idempotent() {
 }
 
 #[test]
+fn test_plain_init_does_not_overwrite_existing_builtin_roles() {
+    let tmp = TempDir::new().unwrap();
+    init_workspace(tmp.path()).unwrap();
+
+    let manager_path = tmp.path().join(".squad").join("roles").join("manager.md");
+    std::fs::write(&manager_path, "customized manager").unwrap();
+
+    init_workspace(tmp.path()).unwrap();
+
+    assert_eq!(
+        std::fs::read_to_string(manager_path).unwrap(),
+        "customized manager"
+    );
+}
+
+#[test]
+fn test_refresh_roles_updates_only_builtin_role_files() {
+    let tmp = TempDir::new().unwrap();
+    init_workspace(tmp.path()).unwrap();
+
+    let roles_dir = tmp.path().join(".squad").join("roles");
+    std::fs::write(roles_dir.join("manager.md"), "old manager").unwrap();
+    std::fs::write(roles_dir.join("worker.md"), "old worker").unwrap();
+    std::fs::write(roles_dir.join("inspector.md"), "old inspector").unwrap();
+    std::fs::write(roles_dir.join("custom.md"), "keep custom").unwrap();
+
+    squad::init::init_workspace_with_options(tmp.path(), true).unwrap();
+
+    assert_eq!(
+        std::fs::read_to_string(roles_dir.join("manager.md")).unwrap(),
+        squad::roles::default_role_prompt("manager").unwrap()
+    );
+    assert_eq!(
+        std::fs::read_to_string(roles_dir.join("worker.md")).unwrap(),
+        squad::roles::default_role_prompt("worker").unwrap()
+    );
+    assert_eq!(
+        std::fs::read_to_string(roles_dir.join("inspector.md")).unwrap(),
+        squad::roles::default_role_prompt("inspector").unwrap()
+    );
+    assert_eq!(
+        std::fs::read_to_string(roles_dir.join("custom.md")).unwrap(),
+        "keep custom"
+    );
+}
+
+#[test]
 fn test_init_adds_gitignore() {
     let tmp = TempDir::new().unwrap();
     init_workspace(tmp.path()).unwrap();

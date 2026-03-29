@@ -99,12 +99,17 @@ Multiple agents with the same role get unique IDs automatically (`worker`, `work
 
 | Command | Description |
 |---------|-------------|
-| `squad init` | Initialize workspace, create `.squad/`, add `.squad/` to `.gitignore`, and append squad guidance to `CLAUDE.md`, `AGENTS.md`, and `GEMINI.md` if missing |
-| `squad join <id> [--role <role>]` | Join as agent (auto-suffixes if ID is taken) |
-| `squad leave <id>` | Remove agent |
-| `squad agents` | List online agents |
-| `squad send <from> <to> <message>` | Send message (`@all` to broadcast, or `squad send --file <path-or-> <from> <to>` to read from file/stdin) |
-| `squad receive <id> [--wait]` | Check inbox (`--wait` is for manual/debug use) |
+| `squad init [--refresh-roles]` | Initialize workspace, create `.squad/`, add `.squad/` to `.gitignore`, and append squad guidance to `CLAUDE.md`, `AGENTS.md`, and `GEMINI.md` if missing. `--refresh-roles` rewrites only builtin `manager`/`worker`/`inspector` files under `.squad/roles/`. |
+| `squad join <id> [--role <role>] [--client <claude\|gemini\|codex\|opencode>] [--protocol-version <n>]` | Join as agent (auto-suffixes if ID is taken; omitted capability metadata stays `NULL`) |
+| `squad leave <id>` | Archive agent and preserve unread work |
+| `squad agents [--all] [--json]` | List online agents (`--json` emits one JSON object per line including raw/effective capability fields and protocol-derived support booleans) |
+| `squad send [--task-id <id>] [--reply-to <message-id>] <from> <to> <message>` | Send a note (`@all` to broadcast, or `squad send [flags] --file <path-or-> <from> <to>` to read from file/stdin) |
+| `squad receive <id> [--wait] [--timeout N] [--json]` | Check inbox (`--wait --timeout N` is for manual/debug use; `--json` emits one JSON object per line) |
+| `squad task create <from> <to> --title <title> [--body <body>]` | Create a structured task assignment |
+| `squad task ack <agent> <task-id>` | Claim a queued task |
+| `squad task complete <agent> <task-id> --summary <text>` | Mark an acked task complete with a summary |
+| `squad task requeue <task-id> [--to <agent>]` | Put a task back into the queue, optionally to a new assignee |
+| `squad task list [--agent <id>] [--status <status>]` | List tasks with optional filters |
 | `squad pending` | Show all unread messages |
 | `squad history [agent] [--from <id>] [--to <id>] [--since <RFC3339\|unix-seconds>]` | Show timestamped message history with optional filters |
 | `squad roles` | List available roles |
@@ -133,9 +138,9 @@ Supported platforms:
 | Codex CLI | `codex` | `~/.codex/prompts/squad.md` |
 | OpenCode | `opencode` | `~/.config/opencode/commands/squad.md` |
 
-Once installed, use `/squad <role>` in any project where `squad init` has been run.
+Once installed, use `/squad <role>` in any project where `squad init` has been run. Generated slash templates automatically join with their platform client type and the current supported protocol version.
 
-`squad init` does more than create `.squad/`: it also appends `.squad/` to `.gitignore` and adds a short squad collaboration section to `CLAUDE.md`, `AGENTS.md`, and `GEMINI.md` when those files do not already contain one.
+`squad init` does more than create `.squad/`: it also appends `.squad/` to `.gitignore` and adds a short squad collaboration section to `CLAUDE.md`, `AGENTS.md`, and `GEMINI.md` when those files do not already contain one. Existing builtin role files stay untouched unless you run `squad init --refresh-roles`.
 
 ## How It Works
 
@@ -147,17 +152,21 @@ Terminal 1 (manager)          Terminal 2 (worker)          Terminal 3 (worker-2)
 │ /squad manager       │      │ /squad worker        │      │ /squad worker        │
 │                      │      │ (auto-ID: worker)    │      │ (auto-ID: worker-2)  │
 │                      │      │                      │      │                      │
-│ squad send manager   │─────>│ squad receive worker │      │                      │
-│   worker "task A"    │      │                      │      │                      │
+│ squad task create    │─────>│ squad receive worker │      │                      │
+│   manager worker     │      │                      │      │                      │
+│   "task-a" "details" │      │                      │      │                      │
 │                      │      │                      │      │                      │
-│ squad send manager   │──────────────────────────────────>│ squad receive         │
-│   worker-2 "task B"  │      │                      │      │   worker-2           │
+│ squad task create    │──────────────────────────────────>│ squad receive         │
+│   manager worker-2   │      │                      │      │   worker-2           │
+│   "task-b" "details" │      │                      │      │                      │
 │                      │      │                      │      │                      │
-│ squad receive manager│<─────│ squad send worker    │      │                      │
-│                      │      │   manager "done A"   │      │                      │
+│ squad receive manager│<─────│ squad task complete  │      │                      │
+│                      │      │   worker <task-id>   │      │                      │
+│                      │      │   "done A"           │      │                      │
 │                      │      │                      │      │                      │
-│                      │<──────────────────────────────────│ squad send worker-2   │
-│                      │      │                      │      │   manager "done B"   │
+│                      │<──────────────────────────────────│ squad task complete   │
+│                      │      │                      │      │   worker-2 <task-id> │
+│                      │      │                      │      │   "done B"           │
 └─────────────────────┘      └─────────────────────┘      └─────────────────────┘
 ```
 
@@ -165,28 +174,46 @@ All messages flow through SQLite — no daemon, no sockets, no background proces
 
 ### Message Flow
 
-Agents should use one-shot `squad receive` checks inside their work loop:
+Agents should prefer `squad task ...` when assignment state matters, and keep `squad send` / `squad receive` as the fallback path for freeform coordination until capability checks land. They should still use one-shot `squad receive` checks inside their work loop:
 
 ```
 Agent joins
   → squad receive <id>                 ← checks once and returns
   → receives task from manager
+  → squad task ack <id> <task-id>
   → executes the task
-  → squad send <id> manager "done: summary..."
+  → squad task complete <id> <task-id> --summary "done: summary..."
   → squad receive <id>                 ← checks again when ready
 ```
+
+`squad receive <id> --wait --timeout <secs>` remains available for manual/debug use, but the default guidance is one-shot receive.
 
 ### ID Auto-Suffix
 
 When multiple agents join with the same ID, squad automatically assigns unique IDs:
 
 ```bash
-squad join worker    # → Joined as worker
-squad join worker    # → ID 'worker' was taken. Joined as worker-2
-squad join worker    # → ID 'worker' was taken. Joined as worker-3
+squad join worker --role worker --client codex --protocol-version 2
+# → Joined as worker
+
+squad join worker --role worker --client opencode --protocol-version 2
+# → ID 'worker' was taken. Joined as worker-2
 ```
 
 This is handled server-side (atomic `INSERT OR IGNORE`), so even simultaneous joins from different terminals are safe.
+
+## Agent Capability Metadata
+
+`squad join` can optionally record agent capability metadata:
+
+```bash
+squad join worker --role worker --client codex --protocol-version 2
+```
+
+- If `--client` or `--protocol-version` is omitted, the database stores `NULL`.
+- `squad agents` shows client/protocol details in human-readable output using the effective fallback view, so legacy rows appear as `client: unknown, protocol: 1`.
+- `squad agents --json` exposes `client_type_raw`, `protocol_version_raw`, `effective_client_type`, `effective_protocol_version`, `supports_task_commands`, and `supports_json_receive`.
+- In the current phase, `supports_task_commands` and `supports_json_receive` are both derived from the effective protocol version, with support enabled at protocol `>= 2`.
 
 ## Role Templates
 
@@ -202,6 +229,8 @@ Create custom roles by adding `.md` files to `.squad/roles/`:
 echo "You are a database specialist..." > .squad/roles/dba.md
 squad join db-expert --role dba
 ```
+
+If the builtin role templates in `.squad/roles/` drift from the bundled defaults, run `squad init --refresh-roles` to refresh only `manager.md`, `worker.md`, and `inspector.md`. Custom role files are left untouched.
 
 ## Team Templates
 
@@ -230,6 +259,11 @@ squad team dev
 Send a message to all agents at once:
 
 ```bash
+squad task create manager worker --title "auth-module" --body "implement auth module with JWT"
+squad task ack worker <task-id>
+squad task complete worker <task-id> --summary "JWT auth shipped"
+squad send --task-id <task-id> inspector worker "please handle follow-up edge cases"
+squad receive worker --json
 squad send manager @all "API contract changed, update your implementations"
 ```
 

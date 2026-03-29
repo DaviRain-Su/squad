@@ -8,6 +8,9 @@ pub struct Platform {
     pub content: &'static str,
 }
 
+pub const DEFAULT_PROTOCOL_VERSION: i64 = 1;
+pub const SUPPORTED_PROTOCOL_VERSION: i64 = 2;
+
 pub const PLATFORMS: &[Platform] = &[
     Platform {
         name: "claude",
@@ -71,7 +74,7 @@ Your join arguments: $ARGUMENTS
    - If ALL agents show "stale" (no active agents), tell the user stale squad state was detected and ask the user whether they want to reset squad state with `squad clean` followed by `squad init`. Do NOT clean automatically.
    - If some agents are active (a team is already running), skip cleanup and proceed.
 
-4. Run `squad join <id> --role <role>` to register yourself.
+4. Run `squad join <id> --role <role> --client __SQUAD_CLIENT__ --protocol-version __SQUAD_PROTOCOL_VERSION__` to register yourself.
    - Read the output line that says "Joined as ..." — that confirms your actual agent ID.
    - If the ID was taken, squad auto-assigns a suffixed ID (e.g. worker-2). Use that ID for all commands.
    - If role instructions are printed (=== Role Instructions ===), follow them.
@@ -79,20 +82,19 @@ Your join arguments: $ARGUMENTS
 
 5. Run `squad agents` to see who else is on the team.
 
-6. **If any squad command returns "Session replaced":** another terminal took your ID. Re-join with a different ID (e.g. `squad join worker-2 --role worker`).
+6. **If any squad command returns "Session replaced":** another terminal took your ID. Re-join with a different ID (e.g. `squad join worker-2 --role worker --client __SQUAD_CLIENT__ --protocol-version __SQUAD_PROTOCOL_VERSION__`).
 
-## Phase 2: Work Loop (infinite — never exit unless told)
+## Phase 2: Work Loop (repeat as needed)
 
-Setup is done. You are now in daemon mode. Run this loop forever:
+Setup is done. Use one-shot `squad receive` checks as part of your normal loop:
 
-1. Run `squad receive <your-id> --wait` to wait for messages. This command blocks until a message arrives.
-   **IMPORTANT:** Do NOT cancel, background, or interrupt this command. Let it run until it returns on its own.
+1. Run `squad receive <your-id>` to check for queued messages once, then let the command return.
 2. If you received a message:
-   a. Execute the task or respond as appropriate for your role.
-   b. Report results: `squad send <your-id> <recipient> "<result>"`
-3. After EVERY receive — whether it returned messages or timed out — **immediately run step 1 again.** No exceptions. Do NOT summarize, do NOT respond to the user, do NOT pause between iterations.
+   a. Prefer `squad task ...` when the team uses structured tasks and explicit task state matters.
+   b. Otherwise fall back to `squad send` / `squad receive` for freeform coordination.
+3. When you are ready for more work, run `squad receive <your-id>` again.
 
-The only valid exit conditions: user explicitly says stop, or `squad receive` returns "Session replaced".
+`squad receive <your-id> --wait --timeout <secs>` is still available for manual/debug use, but it is not the default agent loop.
 
 Other useful commands:
 - `squad send <your-id> <to> "<message>"` — send a message (use @all to broadcast)
@@ -129,7 +131,7 @@ You are joining a squad multi-agent collaboration team.
    - If ALL agents show "stale" (no active agents), tell the user stale squad state was detected and ask the user whether they want to reset squad state with `squad clean` followed by `squad init`. Do NOT clean automatically.
    - If some agents are active (a team is already running), skip cleanup and proceed.
 
-4. Run `squad join <id> --role <role>` to register yourself.
+4. Run `squad join <id> --role <role> --client __SQUAD_CLIENT__ --protocol-version __SQUAD_PROTOCOL_VERSION__` to register yourself.
    - Read the output line that says "Joined as ..." — that confirms your actual agent ID.
    - If the ID was taken, squad auto-assigns a suffixed ID (e.g. worker-2). Use that ID for all commands.
    - If role instructions are printed (=== Role Instructions ===), follow them.
@@ -137,20 +139,19 @@ You are joining a squad multi-agent collaboration team.
 
 5. Run `squad agents` to see who else is on the team.
 
-6. **If any squad command returns "Session replaced":** another terminal took your ID. Re-join with a different ID (e.g. `squad join worker-2 --role worker`).
+6. **If any squad command returns "Session replaced":** another terminal took your ID. Re-join with a different ID (e.g. `squad join worker-2 --role worker --client __SQUAD_CLIENT__ --protocol-version __SQUAD_PROTOCOL_VERSION__`).
 
-## Phase 2: Work Loop (infinite — never exit unless told)
+## Phase 2: Work Loop (repeat as needed)
 
-Setup is done. You are now in daemon mode. Run this loop forever:
+Setup is done. Use one-shot `squad receive` checks as part of your normal loop:
 
-1. Run `squad receive <your-id> --wait` to wait for messages. This command blocks until a message arrives.
-   **IMPORTANT:** Do NOT cancel, background, or interrupt this command. Let it run until it returns on its own.
+1. Run `squad receive <your-id>` to check for queued messages once, then let the command return.
 2. If you received a message:
-   a. Execute the task or respond as appropriate for your role.
-   b. Report results: `squad send <your-id> <recipient> "<result>"`
-3. After EVERY receive — whether it returned messages or timed out — **immediately run step 1 again.** No exceptions. Do NOT summarize, do NOT respond to the user, do NOT pause between iterations.
+   a. Prefer `squad task ...` when the team uses structured tasks and explicit task state matters.
+   b. Otherwise fall back to `squad send` / `squad receive` for freeform coordination.
+3. When you are ready for more work, run `squad receive <your-id>` again.
 
-The only valid exit conditions: user explicitly says stop, or `squad receive` returns "Session replaced".
+`squad receive <your-id> --wait --timeout <secs>` is still available for manual/debug use, but it is not the default agent loop.
 
 Other useful commands:
 - `squad send <your-id> <to> "<message>"` — send a message (use @all to broadcast)
@@ -179,6 +180,63 @@ fn extract_version(content: &str) -> Option<&str> {
     None
 }
 
+/// Diagnose slash template health for a set of installed platforms.
+/// Returns a list of OK/WARN lines sorted by platform name within each class.
+pub fn diagnose_templates_for_platforms(
+    platforms: &[&Platform],
+    home: &Path,
+) -> Result<Vec<String>> {
+    if platforms.is_empty() {
+        return Ok(vec![
+            "OK: no installed slash templates detected".to_string(),
+        ]);
+    }
+    let version = current_version();
+    let mut warnings: Vec<(String, String)> = Vec::new();
+    for platform in platforms {
+        let path = home.join(platform.command_path);
+        if !path.exists() {
+            warnings.push((
+                platform.name.to_string(),
+                format!(
+                    "WARN: slash template {} is missing; run squad init or squad setup",
+                    platform.name
+                ),
+            ));
+            continue;
+        }
+        let content = std::fs::read_to_string(&path)
+            .with_context(|| format!("failed to read {}", path.display()))?;
+        match extract_version(&content) {
+            None => {
+                warnings.push((
+                    platform.name.to_string(),
+                    format!(
+                        "WARN: slash template {} is missing squad-version marker; run squad init or squad setup",
+                        platform.name
+                    ),
+                ));
+            }
+            Some(v) if v != version => {
+                warnings.push((
+                    platform.name.to_string(),
+                    format!(
+                        "WARN: slash template {} is outdated (installed={}, current={}); run squad init or squad setup",
+                        platform.name, v, version
+                    ),
+                ));
+            }
+            Some(_) => {}
+        }
+    }
+    if warnings.is_empty() {
+        Ok(vec!["OK: slash templates are current".to_string()])
+    } else {
+        warnings.sort_by(|a, b| a.0.cmp(&b.0));
+        Ok(warnings.into_iter().map(|(_, msg)| msg).collect())
+    }
+}
+
 /// Check installed slash commands and update any that are outdated, missing version markers,
 /// or missing entirely (for detected platforms).
 /// Returns list of (platform_name, path) for updated/installed files.
@@ -203,7 +261,7 @@ pub fn check_and_update_commands() -> Vec<(String, PathBuf)> {
             true // file missing = needs install
         };
         if needs_update {
-            let content = versioned_content(platform.content, version);
+            let content = versioned_content(&command_content(platform), version);
             if install_command(&path, &content).is_ok() {
                 updated.push((platform.name.to_string(), path));
             }
@@ -245,6 +303,16 @@ fn versioned_content(content: &str, version: &str) -> String {
     format!("# squad-version: {}\n{}", version, content)
 }
 
+pub fn command_content(platform: &Platform) -> String {
+    platform
+        .content
+        .replace("__SQUAD_CLIENT__", platform.name)
+        .replace(
+            "__SQUAD_PROTOCOL_VERSION__",
+            &SUPPORTED_PROTOCOL_VERSION.to_string(),
+        )
+}
+
 /// Check if a binary exists in PATH.
 pub fn is_installed(binary: &str) -> bool {
     std::process::Command::new("which")
@@ -281,7 +349,7 @@ pub fn install_command(path: &Path, content: &str) -> Result<()> {
 /// Install for a specific platform (with version marker).
 pub fn install_for_platform(platform: &Platform) -> Result<PathBuf> {
     let path = command_path(platform)?;
-    let content = versioned_content(platform.content, current_version());
+    let content = versioned_content(&command_content(platform), current_version());
     install_command(&path, &content)?;
     Ok(path)
 }

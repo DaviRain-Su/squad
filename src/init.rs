@@ -5,6 +5,10 @@ use crate::roles;
 use crate::teams;
 
 pub fn init_workspace(workspace: &Path) -> Result<()> {
+    init_workspace_with_options(workspace, false)
+}
+
+pub fn init_workspace_with_options(workspace: &Path, refresh_roles: bool) -> Result<()> {
     let squad_dir = workspace.join(".squad");
     let roles_dir = squad_dir.join("roles");
     let teams_dir = squad_dir.join("teams");
@@ -17,10 +21,10 @@ pub fn init_workspace(workspace: &Path) -> Result<()> {
     std::fs::create_dir_all(&sessions_dir)
         .with_context(|| format!("failed to create {}", sessions_dir.display()))?;
 
-    // Write builtin role templates (skip if already exist)
+    // Write builtin role templates. Plain init is non-destructive; refresh rewrites builtins only.
     for role in roles::BUILTIN_ROLES {
         let path = roles_dir.join(format!("{role}.md"));
-        if !path.exists() {
+        if !path.exists() || refresh_roles {
             if let Some(content) = roles::default_role_prompt(role) {
                 std::fs::write(&path, content)
                     .with_context(|| format!("failed to write {}", path.display()))?;

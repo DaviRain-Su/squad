@@ -1,4 +1,7 @@
-use squad::setup::{install_command, PLATFORMS, SQUAD_MD_CONTENT, SQUAD_TOML_CONTENT};
+use squad::setup::{
+    current_version, diagnose_templates_for_platforms, install_command, PLATFORMS,
+    SQUAD_MD_CONTENT, SQUAD_TOML_CONTENT,
+};
 use tempfile::TempDir;
 
 #[test]
@@ -85,11 +88,27 @@ fn test_md_content_has_actual_id_instruction() {
 }
 
 #[test]
-fn test_templates_use_blocking_receive_with_daemon_loop() {
-    assert!(SQUAD_MD_CONTENT.contains("squad receive <your-id> --wait"));
-    assert!(SQUAD_TOML_CONTENT.contains("squad receive <your-id> --wait"));
-    assert!(SQUAD_MD_CONTENT.contains("immediately run step 1 again"));
-    assert!(SQUAD_TOML_CONTENT.contains("immediately run step 1 again"));
+fn test_templates_use_one_shot_receive_guidance() {
+    assert!(SQUAD_MD_CONTENT.contains("squad receive <your-id>"));
+    assert!(SQUAD_TOML_CONTENT.contains("squad receive <your-id>"));
+    assert!(SQUAD_MD_CONTENT
+        .contains("Run `squad receive <your-id>` to check for queued messages once"));
+    assert!(SQUAD_TOML_CONTENT
+        .contains("Run `squad receive <your-id>` to check for queued messages once"));
+    assert!(SQUAD_MD_CONTENT.contains("manual/debug"));
+    assert!(SQUAD_TOML_CONTENT.contains("manual/debug"));
+}
+
+#[test]
+fn test_templates_prefer_task_workflow_with_send_receive_fallback() {
+    assert!(
+        SQUAD_MD_CONTENT.contains("Prefer `squad task ...` when the team uses structured tasks")
+    );
+    assert!(
+        SQUAD_TOML_CONTENT.contains("Prefer `squad task ...` when the team uses structured tasks")
+    );
+    assert!(SQUAD_MD_CONTENT.contains("fall back to `squad send` / `squad receive`"));
+    assert!(SQUAD_TOML_CONTENT.contains("fall back to `squad send` / `squad receive`"));
 }
 
 #[test]
@@ -105,4 +124,94 @@ fn test_setup_templates_do_not_auto_clean_without_user_confirmation() {
     assert!(!SQUAD_TOML_CONTENT.contains("run `squad clean` then `squad init`"));
     assert!(SQUAD_MD_CONTENT.contains("ask the user"));
     assert!(SQUAD_TOML_CONTENT.contains("ask the user"));
+}
+
+#[test]
+fn test_template_diagnostics_report_missing_outdated_and_markerless_templates_in_platform_order() {
+    let tmp = TempDir::new().unwrap();
+    let home = tmp.path();
+    let claude = PLATFORMS
+        .iter()
+        .find(|platform| platform.name == "claude")
+        .unwrap();
+    let codex = PLATFORMS
+        .iter()
+        .find(|platform| platform.name == "codex")
+        .unwrap();
+    let gemini = PLATFORMS
+        .iter()
+        .find(|platform| platform.name == "gemini")
+        .unwrap();
+
+    let codex_path = home.join(codex.command_path);
+    install_command(&codex_path, "plain content without marker").unwrap();
+
+    let gemini_path = home.join(gemini.command_path);
+    install_command(
+        &gemini_path,
+        "# squad-version: 0.0.1\ndescription = \"old\"",
+    )
+    .unwrap();
+
+    let diagnostics = diagnose_templates_for_platforms(&[gemini, claude, codex], home).unwrap();
+
+    assert_eq!(
+        diagnostics,
+        vec![
+            "WARN: slash template claude is missing; run squad init or squad setup".to_string(),
+            "WARN: slash template codex is missing squad-version marker; run squad init or squad setup"
+                .to_string(),
+            format!(
+                "WARN: slash template gemini is outdated (installed=0.0.1, current={}); run squad init or squad setup",
+                current_version()
+            ),
+        ]
+    );
+}
+
+#[test]
+fn test_template_diagnostics_report_ok_when_no_supported_binaries_are_installed() {
+    let tmp = TempDir::new().unwrap();
+
+    let diagnostics = diagnose_templates_for_platforms(&[], tmp.path()).unwrap();
+
+    assert_eq!(
+        diagnostics,
+        vec!["OK: no installed slash templates detected".to_string()]
+    );
+}
+
+#[test]
+fn test_template_diagnostics_report_ok_when_all_templates_are_current() {
+    let tmp = TempDir::new().unwrap();
+    let home = tmp.path();
+    let claude = PLATFORMS
+        .iter()
+        .find(|platform| platform.name == "claude")
+        .unwrap();
+    let gemini = PLATFORMS
+        .iter()
+        .find(|platform| platform.name == "gemini")
+        .unwrap();
+
+    let claude_path = home.join(claude.command_path);
+    install_command(
+        &claude_path,
+        &format!("# squad-version: {}\nclaude template", current_version()),
+    )
+    .unwrap();
+
+    let gemini_path = home.join(gemini.command_path);
+    install_command(
+        &gemini_path,
+        &format!("# squad-version: {}\ngemini template", current_version()),
+    )
+    .unwrap();
+
+    let diagnostics = diagnose_templates_for_platforms(&[gemini, claude], home).unwrap();
+
+    assert_eq!(
+        diagnostics,
+        vec!["OK: slash templates are current".to_string()]
+    );
 }

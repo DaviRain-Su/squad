@@ -1,5 +1,9 @@
 use assert_cmd::Command;
 use predicates::prelude::*;
+use squad::store::Store;
+use std::process::{Command as StdCommand, Stdio};
+use std::thread::sleep;
+use std::time::Duration;
 use tempfile::TempDir;
 
 fn squad(workspace: &std::path::Path) -> Command {
@@ -227,7 +231,7 @@ fn test_broadcast_to_workers() {
     }
 }
 
-/// Send to left agent fails
+/// Send to archived agent fails
 #[test]
 fn test_send_to_left_agent_fails() {
     let tmp = setup_workspace();
@@ -249,11 +253,131 @@ fn test_send_to_left_agent_fails() {
         .args(["send", "manager", "worker", "hello"])
         .assert()
         .failure()
-        .stderr(predicate::str::contains("does not exist"));
+        .stderr(predicate::str::contains("worker is archived"));
 }
 
 #[test]
-fn test_rejoin_same_id_does_not_receive_old_unread_messages() {
+fn test_archived_agent_cannot_receive_until_rejoin() {
+    let tmp = setup_workspace();
+
+    squad(tmp.path())
+        .args(["join", "manager"])
+        .assert()
+        .success();
+    squad(tmp.path())
+        .args(["join", "worker"])
+        .assert()
+        .success();
+
+    squad(tmp.path())
+        .args(["send", "manager", "worker", "task-before-leave"])
+        .assert()
+        .success();
+
+    squad(tmp.path())
+        .args(["leave", "worker"])
+        .assert()
+        .success();
+
+    squad(tmp.path())
+        .args(["receive", "worker"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("worker is archived"));
+}
+
+#[test]
+fn test_receive_wait_fails_if_agent_is_archived_mid_poll() {
+    let tmp = setup_workspace();
+
+    squad(tmp.path())
+        .args(["join", "worker"])
+        .assert()
+        .success();
+
+    let child = StdCommand::new(assert_cmd::cargo::cargo_bin("squad"))
+        .current_dir(tmp.path())
+        .args(["receive", "worker", "--wait", "--timeout", "5"])
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+
+    sleep(Duration::from_millis(700));
+
+    squad(tmp.path())
+        .args(["leave", "worker"])
+        .assert()
+        .success();
+
+    let output = child.wait_with_output().unwrap();
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("worker is archived"));
+}
+
+#[test]
+fn test_old_receive_wait_does_not_consume_rejoined_session_messages() {
+    let tmp = setup_workspace();
+
+    squad(tmp.path())
+        .args(["join", "manager"])
+        .assert()
+        .success();
+    squad(tmp.path())
+        .args(["join", "worker"])
+        .assert()
+        .success();
+
+    let mut child = StdCommand::new(assert_cmd::cargo::cargo_bin("squad"))
+        .current_dir(tmp.path())
+        .args(["receive", "worker", "--wait", "--timeout", "5"])
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+
+    sleep(Duration::from_millis(700));
+
+    squad(tmp.path())
+        .args(["leave", "worker"])
+        .assert()
+        .success();
+
+    let workspace = tmp.path().join(".squad");
+    let store = Store::open(&workspace.join("messages.db")).unwrap();
+    let (_id, token) = store.register_agent_unique("worker", "worker").unwrap();
+
+    sleep(Duration::from_millis(700));
+
+    let early_status = child.try_wait().unwrap();
+    assert!(
+        early_status.is_some(),
+        "old waiter should exit once DB token changes"
+    );
+
+    squad::session::write_token(&workspace.join("sessions"), "worker", &token).unwrap();
+    squad(tmp.path())
+        .args(["send", "manager", "worker", "new-session-task"])
+        .assert()
+        .success();
+
+    let output = child.wait_with_output().unwrap();
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("Session replaced"));
+
+    squad(tmp.path())
+        .args(["receive", "worker"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("new-session-task"));
+}
+
+#[test]
+fn test_rejoin_same_id_receives_old_unread_messages() {
     let tmp = setup_workspace();
 
     squad(tmp.path())
@@ -283,9 +407,7 @@ fn test_rejoin_same_id_does_not_receive_old_unread_messages() {
         .args(["receive", "worker"])
         .assert()
         .success()
-        .stdout(predicate::str::contains(
-            "No new messages. Run `squad receive worker` again to keep listening.",
-        ));
+        .stdout(predicate::str::contains("task-before-leave"));
 }
 
 /// Clean command removes state
