@@ -76,12 +76,10 @@ class Squad < Formula
     bin.install "squad"
   end
 
-  def post_install
-    system "#{bin}/squad", "setup"
-  end
-
   def caveats
     <<~EOS
+      Slash commands are auto-installed when you run \`squad init\`.
+
       To remove slash commands before uninstalling:
         squad cleanup
     EOS
