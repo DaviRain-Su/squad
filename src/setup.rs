@@ -88,8 +88,9 @@ Your join arguments: $ARGUMENTS
 
 Setup is done. You are now in daemon mode. Run this loop forever:
 
-1. Run `squad receive <your-id> --wait` to wait for messages. This command blocks until a message arrives.
+1. Run `squad receive <your-id> --wait --timeout 120` to wait for messages. This blocks for up to 2 minutes or until a message arrives.
    **IMPORTANT:** Do NOT cancel, background, or interrupt this command. Let it run until it returns on its own.
+   **IMPORTANT:** Do NOT start another receive if one is already running in the background. If the command was backgrounded by your host, wait for it to complete before starting a new one. There must be AT MOST one receive running at any time.
 2. If you received a message:
    a. Execute the task or respond as appropriate for your role.
    b. Report results using `squad send` or `squad task` commands.
@@ -147,8 +148,9 @@ You are joining a squad multi-agent collaboration team.
 
 Setup is done. You are now in daemon mode. Run this loop forever:
 
-1. Run `squad receive <your-id> --wait` to wait for messages. This command blocks until a message arrives.
+1. Run `squad receive <your-id> --wait --timeout 120` to wait for messages. This blocks for up to 2 minutes or until a message arrives.
    **IMPORTANT:** Do NOT cancel, background, or interrupt this command. Let it run until it returns on its own.
+   **IMPORTANT:** Do NOT start another receive if one is already running in the background. If the command was backgrounded by your host, wait for it to complete before starting a new one. There must be AT MOST one receive running at any time.
 2. If you received a message:
    a. Execute the task or respond as appropriate for your role.
    b. Report results using `squad send` or `squad task` commands.

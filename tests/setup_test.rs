@@ -88,11 +88,13 @@ fn test_md_content_has_actual_id_instruction() {
 }
 
 #[test]
-fn test_templates_use_wait_receive_guidance() {
-    assert!(SQUAD_MD_CONTENT.contains("squad receive <your-id> --wait"));
-    assert!(SQUAD_TOML_CONTENT.contains("squad receive <your-id> --wait"));
-    assert!(SQUAD_MD_CONTENT.contains("blocks until a message arrives"));
-    assert!(SQUAD_TOML_CONTENT.contains("blocks until a message arrives"));
+fn test_templates_use_bounded_wait_receive_guidance() {
+    // Templates should instruct bounded --wait with --timeout 120
+    assert!(SQUAD_MD_CONTENT.contains("squad receive <your-id> --wait --timeout 120"));
+    assert!(SQUAD_TOML_CONTENT.contains("squad receive <your-id> --wait --timeout 120"));
+    // Templates should warn against concurrent receives
+    assert!(SQUAD_MD_CONTENT.contains("AT MOST one receive running at any time"));
+    assert!(SQUAD_TOML_CONTENT.contains("AT MOST one receive running at any time"));
 }
 
 #[test]

@@ -1,5 +1,6 @@
 use anyhow::{bail, Context, Result};
 use chrono::TimeZone;
+use fs2::FileExt;
 use serde::Serialize;
 use std::path::{Path, PathBuf};
 
@@ -793,6 +794,25 @@ fn cmd_receive(agent: &str, wait: bool, timeout_secs: u64, json: bool) -> Result
     store.touch_agent(agent)?;
 
     if wait {
+        // Acquire exclusive file lock to prevent multiple concurrent receive --wait
+        // processes from competing for the same agent's messages.
+        let lock_dir = workspace.join("locks");
+        std::fs::create_dir_all(&lock_dir)?;
+        let lock_path = lock_dir.join(format!("{}.receive.lock", agent));
+        let lock_file = std::fs::File::create(&lock_path)
+            .with_context(|| format!("failed to create lock file: {}", lock_path.display()))?;
+        if lock_file.try_lock_exclusive().is_err() {
+            bail!(
+                "Another `squad receive --wait` is already running for agent '{}'. \
+                 Only one receive --wait per agent is allowed. Use `squad receive {}` \
+                 (without --wait) for non-blocking polling.",
+                agent,
+                agent
+            );
+        }
+        // Keep _lock_file alive for the duration of the wait loop (lock released on drop).
+        let _lock_guard = lock_file;
+
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(timeout_secs);
         let mut last_heartbeat = std::time::Instant::now();
         loop {

@@ -16,10 +16,11 @@ fn test_load_builtin_role() {
 }
 
 #[test]
-fn test_builtin_roles_recommend_wait_receive() {
+fn test_builtin_roles_recommend_bounded_wait_receive() {
     for role in BUILTIN_ROLES {
         let prompt = default_role_prompt(role).unwrap();
-        assert!(prompt.contains("squad receive <your-id> --wait"));
+        assert!(prompt.contains("squad receive <your-id> --wait --timeout 120"));
+        assert!(prompt.contains("AT MOST one receive running at any time"));
     }
 }
 
