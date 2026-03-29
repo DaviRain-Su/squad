@@ -530,7 +530,7 @@ fn print_messages(
     if let Some(id) = receiver {
         if !messages.is_empty() {
             println!(
-                "After processing this message and sending your reply, run `squad receive {id} --wait` to continue listening."
+                "  → After processing, run `squad receive {id} --wait` to continue listening."
             );
         }
     }
@@ -836,7 +836,7 @@ fn cmd_receive(agent: &str, wait: bool, timeout_secs: u64, json: bool) -> Result
             if json {
                 return Ok(());
             } else {
-                println!("No new messages. Run `squad receive {agent}` again to keep listening.");
+                println!("No new messages. Run `squad receive {agent} --wait` to keep listening.");
             }
         } else {
             if json {
@@ -1265,7 +1265,7 @@ COMMANDS
   squad send [--task-id <id>] [--reply-to <message-id>] <from> <to> <message>
                                              Send message (`squad send --file <path-or-> <from> <to>` reads from file/stdin)
   squad receive <id> [--wait] [--timeout N] [--json]
-                                             Check inbox once (`--wait` defaults to 86400s; `--wait --timeout N` is for manual/debug use; `--json` emits one JSON object per line)
+                                             Check inbox (`--wait` blocks until a message arrives, default 86400s; `--json` emits one JSON object per line)
   squad task create <from> <to> --title <title> [--body <body>]
                                              Create a structured task assignment
   squad task ack <agent> <task-id>           Acknowledge a queued task

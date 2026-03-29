@@ -88,27 +88,19 @@ fn test_md_content_has_actual_id_instruction() {
 }
 
 #[test]
-fn test_templates_use_one_shot_receive_guidance() {
-    assert!(SQUAD_MD_CONTENT.contains("squad receive <your-id>"));
-    assert!(SQUAD_TOML_CONTENT.contains("squad receive <your-id>"));
-    assert!(SQUAD_MD_CONTENT
-        .contains("Run `squad receive <your-id>` to check for queued messages once"));
-    assert!(SQUAD_TOML_CONTENT
-        .contains("Run `squad receive <your-id>` to check for queued messages once"));
-    assert!(SQUAD_MD_CONTENT.contains("manual/debug"));
-    assert!(SQUAD_TOML_CONTENT.contains("manual/debug"));
+fn test_templates_use_wait_receive_guidance() {
+    assert!(SQUAD_MD_CONTENT.contains("squad receive <your-id> --wait"));
+    assert!(SQUAD_TOML_CONTENT.contains("squad receive <your-id> --wait"));
+    assert!(SQUAD_MD_CONTENT.contains("blocks until a message arrives"));
+    assert!(SQUAD_TOML_CONTENT.contains("blocks until a message arrives"));
 }
 
 #[test]
-fn test_templates_prefer_task_workflow_with_send_receive_fallback() {
-    assert!(
-        SQUAD_MD_CONTENT.contains("Prefer `squad task ...` when the team uses structured tasks")
-    );
-    assert!(
-        SQUAD_TOML_CONTENT.contains("Prefer `squad task ...` when the team uses structured tasks")
-    );
-    assert!(SQUAD_MD_CONTENT.contains("fall back to `squad send` / `squad receive`"));
-    assert!(SQUAD_TOML_CONTENT.contains("fall back to `squad send` / `squad receive`"));
+fn test_templates_mention_task_commands() {
+    assert!(SQUAD_MD_CONTENT.contains("squad task"));
+    assert!(SQUAD_TOML_CONTENT.contains("squad task"));
+    assert!(SQUAD_MD_CONTENT.contains("squad send"));
+    assert!(SQUAD_TOML_CONTENT.contains("squad send"));
 }
 
 #[test]

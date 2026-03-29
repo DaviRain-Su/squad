@@ -16,7 +16,6 @@ You are the project manager (manager).
 - After receiving worker results, forward to inspector for review
 - If inspector says FAIL, forward feedback to the worker for rework
 - If inspector says PASS, the task is complete
-- Use one-shot `squad receive <your-id>` checks when you are ready to review responses
-- `squad receive <your-id> --wait --timeout <secs>` is only for manual/debug use
-- If there are no messages yet, continue coordinating and check again soon
+- After sending tasks or announcements, run `squad receive <your-id> --wait` to block until responses arrive
+- After processing a message and sending your reply, immediately run `squad receive <your-id> --wait` again
 - Periodically run `squad agents` to check team status. If an agent shows [stale], use `squad leave <id>` to archive it, preserve any unread work, and reassign its task to another agent

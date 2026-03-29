@@ -104,7 +104,7 @@ Multiple agents with the same role get unique IDs automatically (`worker`, `work
 | `squad leave <id>` | Archive agent and preserve unread work |
 | `squad agents [--all] [--json]` | List online agents (`--json` emits one JSON object per line including raw/effective capability fields and protocol-derived support booleans) |
 | `squad send [--task-id <id>] [--reply-to <message-id>] <from> <to> <message>` | Send a note (`@all` to broadcast, or `squad send [flags] --file <path-or-> <from> <to>` to read from file/stdin) |
-| `squad receive <id> [--wait] [--timeout N] [--json]` | Check inbox (`--wait --timeout N` is for manual/debug use; `--json` emits one JSON object per line) |
+| `squad receive <id> [--wait] [--timeout N] [--json]` | Check inbox (`--wait` blocks until a message arrives; `--json` emits one JSON object per line) |
 | `squad task create <from> <to> --title <title> [--body <body>]` | Create a structured task assignment |
 | `squad task ack <agent> <task-id>` | Claim a queued task |
 | `squad task complete <agent> <task-id> --summary <text>` | Mark an acked task complete with a summary |
@@ -174,19 +174,19 @@ All messages flow through SQLite — no daemon, no sockets, no background proces
 
 ### Message Flow
 
-Agents should prefer `squad task ...` when assignment state matters, and keep `squad send` / `squad receive` as the fallback path for freeform coordination until capability checks land. They should still use one-shot `squad receive` checks inside their work loop:
+Agents should prefer `squad task ...` when assignment state matters, and keep `squad send` / `squad receive` as the fallback path for freeform coordination. Agents use `squad receive --wait` to block until messages arrive:
 
 ```
 Agent joins
-  → squad receive <id>                 ← checks once and returns
+  → squad receive <id> --wait          ← blocks until a message arrives
   → receives task from manager
   → squad task ack <id> <task-id>
   → executes the task
   → squad task complete <id> <task-id> --summary "done: summary..."
-  → squad receive <id>                 ← checks again when ready
+  → squad receive <id> --wait          ← blocks again for next message
 ```
 
-`squad receive <id> --wait --timeout <secs>` remains available for manual/debug use, but the default guidance is one-shot receive.
+`squad receive <id>` (without `--wait`) checks once and returns immediately, useful for scripting or manual checks.
 
 ### ID Auto-Suffix
 

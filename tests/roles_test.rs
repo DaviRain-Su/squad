@@ -16,12 +16,10 @@ fn test_load_builtin_role() {
 }
 
 #[test]
-fn test_builtin_roles_recommend_one_shot_receive() {
+fn test_builtin_roles_recommend_wait_receive() {
     for role in BUILTIN_ROLES {
         let prompt = default_role_prompt(role).unwrap();
-        assert!(prompt.contains("squad receive"));
-        assert!(prompt.contains("manual/debug"));
-        assert!(!prompt.contains("run `squad receive <your-id> --wait`"));
+        assert!(prompt.contains("squad receive <your-id> --wait"));
     }
 }
 

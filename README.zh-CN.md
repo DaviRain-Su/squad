@@ -106,7 +106,7 @@ squad init
 | `squad leave <id>` | 归档 Agent，并保留未读工作 |
 | `squad agents [--all] [--json]` | 列出在线 Agent（`--json` 每行输出一个 JSON 对象，包含原始/生效能力字段和基于协议版本推导的支持布尔值） |
 | `squad send [--task-id <id>] [--reply-to <message-id>] <from> <to> <message>` | 发送普通消息（`@all` 广播给所有人，或用 `squad send [flags] --file <path-or-> <from> <to>` 从文件/标准输入读取内容） |
-| `squad receive <id> [--wait] [--timeout N] [--json]` | 检查收件箱（`--wait --timeout N` 仅建议手动调试时使用；`--json` 每行输出一个 JSON 对象） |
+| `squad receive <id> [--wait] [--timeout N] [--json]` | 检查收件箱（`--wait` 阻塞等待直到消息到达；`--json` 每行输出一个 JSON 对象） |
 | `squad task create <from> <to> --title <title> [--body <body>]` | 创建结构化任务分配 |
 | `squad task ack <agent> <task-id>` | 领取排队中的任务 |
 | `squad task complete <agent> <task-id> --summary <text>` | 用结果摘要完成已 ack 的任务 |
@@ -172,19 +172,19 @@ Agent 通过共享的 SQLite 数据库（`.squad/messages.db`）通信。每个 
 
 ### 消息流程
 
-当任务状态需要被显式跟踪时，Agent 应优先使用 `squad task ...`；在能力检查尚未落地前，`squad send` / `squad receive` 仍然是自由协作的兜底路径。工作循环里仍建议使用 one-shot `squad receive`：
+当任务状态需要被显式跟踪时，Agent 应优先使用 `squad task ...`；`squad send` / `squad receive` 仍然是自由协作的兜底路径。Agent 使用 `squad receive --wait` 阻塞等待消息：
 
 ```
 Agent 加入
-  → squad receive <id>                 ← 检查一次后返回
+  → squad receive <id> --wait          ← 阻塞等待消息到达
   → 收到 Manager 分配的任务
   → squad task ack <id> <task-id>
   → 执行任务
   → squad task complete <id> <task-id> --summary "完成：摘要..."
-  → squad receive <id>                 ← 准备好后再检查一次
+  → squad receive <id> --wait          ← 再次阻塞等待下一条消息
 ```
 
-`squad receive <id> --wait --timeout <secs>` 仍然保留，适合手动排查或调试；默认推荐仍然是 one-shot `receive`。
+`squad receive <id>`（不带 `--wait`）检查一次后立即返回，适用于脚本或手动检查。
 
 ### ID 自动后缀
 

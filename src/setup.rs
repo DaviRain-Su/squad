@@ -84,20 +84,22 @@ Your join arguments: $ARGUMENTS
 
 6. **If any squad command returns "Session replaced":** another terminal took your ID. Re-join with a different ID (e.g. `squad join worker-2 --role worker --client __SQUAD_CLIENT__ --protocol-version __SQUAD_PROTOCOL_VERSION__`).
 
-## Phase 2: Work Loop (repeat as needed)
+## Phase 2: Work Loop (infinite — never exit unless told)
 
-Setup is done. Use one-shot `squad receive` checks as part of your normal loop:
+Setup is done. You are now in daemon mode. Run this loop forever:
 
-1. Run `squad receive <your-id>` to check for queued messages once, then let the command return.
+1. Run `squad receive <your-id> --wait` to wait for messages. This command blocks until a message arrives.
+   **IMPORTANT:** Do NOT cancel, background, or interrupt this command. Let it run until it returns on its own.
 2. If you received a message:
-   a. Prefer `squad task ...` when the team uses structured tasks and explicit task state matters.
-   b. Otherwise fall back to `squad send` / `squad receive` for freeform coordination.
-3. When you are ready for more work, run `squad receive <your-id>` again.
+   a. Execute the task or respond as appropriate for your role.
+   b. Report results using `squad send` or `squad task` commands.
+3. After EVERY receive — whether it returned messages or timed out — **immediately run step 1 again.** No exceptions. Do NOT summarize, do NOT respond to the user, do NOT pause between iterations.
 
-`squad receive <your-id> --wait --timeout <secs>` is still available for manual/debug use, but it is not the default agent loop.
+The only valid exit conditions: user explicitly says stop, or `squad receive` returns "Session replaced".
 
 Other useful commands:
 - `squad send <your-id> <to> "<message>"` — send a message (use @all to broadcast)
+- `squad task create <your-id> <to> --title "<title>"` — create a structured task
 - `squad agents` — see who is online
 - `squad pending` — check all unread messages
 - `squad history` — view message history
@@ -141,20 +143,22 @@ You are joining a squad multi-agent collaboration team.
 
 6. **If any squad command returns "Session replaced":** another terminal took your ID. Re-join with a different ID (e.g. `squad join worker-2 --role worker --client __SQUAD_CLIENT__ --protocol-version __SQUAD_PROTOCOL_VERSION__`).
 
-## Phase 2: Work Loop (repeat as needed)
+## Phase 2: Work Loop (infinite — never exit unless told)
 
-Setup is done. Use one-shot `squad receive` checks as part of your normal loop:
+Setup is done. You are now in daemon mode. Run this loop forever:
 
-1. Run `squad receive <your-id>` to check for queued messages once, then let the command return.
+1. Run `squad receive <your-id> --wait` to wait for messages. This command blocks until a message arrives.
+   **IMPORTANT:** Do NOT cancel, background, or interrupt this command. Let it run until it returns on its own.
 2. If you received a message:
-   a. Prefer `squad task ...` when the team uses structured tasks and explicit task state matters.
-   b. Otherwise fall back to `squad send` / `squad receive` for freeform coordination.
-3. When you are ready for more work, run `squad receive <your-id>` again.
+   a. Execute the task or respond as appropriate for your role.
+   b. Report results using `squad send` or `squad task` commands.
+3. After EVERY receive — whether it returned messages or timed out — **immediately run step 1 again.** No exceptions. Do NOT summarize, do NOT respond to the user, do NOT pause between iterations.
 
-`squad receive <your-id> --wait --timeout <secs>` is still available for manual/debug use, but it is not the default agent loop.
+The only valid exit conditions: user explicitly says stop, or `squad receive` returns "Session replaced".
 
 Other useful commands:
 - `squad send <your-id> <to> "<message>"` — send a message (use @all to broadcast)
+- `squad task create <your-id> <to> --title "<title>"` — create a structured task
 - `squad agents` — see who is online
 - `squad pending` — check all unread messages
 - `squad history` — view message history

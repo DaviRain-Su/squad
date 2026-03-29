@@ -373,7 +373,7 @@ fn test_send_and_receive() {
         .stdout(predicate::str::contains("[from manager]"))
         .stdout(predicate::str::contains("implement auth module"))
         .stdout(predicate::str::contains(
-            "After processing this message and sending your reply, run `squad receive worker --wait` to continue listening.",
+            "After processing, run `squad receive worker --wait` to continue listening.",
         ));
 }
 
@@ -768,7 +768,7 @@ fn test_help_describes_wait_as_debug_only() {
             "squad receive <id> [--wait] [--timeout N] [--json]",
         ))
         .stdout(predicate::str::contains(
-            "`--wait` defaults to 86400s; `--wait --timeout N` is for manual/debug use",
+            "`--wait` blocks until a message arrives",
         ))
         .stdout(predicate::str::contains(
             "squad task create <from> <to> --title <title> [--body <body>]",
@@ -1132,7 +1132,7 @@ fn test_receive_wait_message_includes_continue_listening_prompt() {
         .success()
         .stdout(predicate::str::contains("queued for wait"))
         .stdout(predicate::str::contains(
-            "After processing this message and sending your reply, run `squad receive worker --wait` to continue listening.",
+            "After processing, run `squad receive worker --wait` to continue listening.",
         ));
 }
 
