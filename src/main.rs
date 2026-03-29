@@ -92,7 +92,8 @@ fn main() -> Result<()> {
             println!("squad {}", env!("CARGO_PKG_VERSION"));
             Ok(())
         }
-        other => bail!("unknown command: {other}. Run 'squad help' for usage."),
+        // Treat unknown commands as role-based join: `squad cto` = `squad join cto --role cto`
+        other => cmd_join(other, other),
     }
 }
 
