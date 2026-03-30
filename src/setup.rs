@@ -189,9 +189,7 @@ pub fn diagnose_templates_for_platforms(
     home: &Path,
 ) -> Result<Vec<String>> {
     if platforms.is_empty() {
-        return Ok(vec![
-            "OK: no installed slash templates detected".to_string(),
-        ]);
+        return Ok(vec!["OK: no installed slash templates detected".to_string()]);
     }
     let version = current_version();
     let mut warnings: Vec<(String, String)> = Vec::new();

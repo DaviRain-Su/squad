@@ -1185,10 +1185,8 @@ fn cmd_doctor() -> Result<()> {
         .iter()
         .filter(|p| squad::setup::is_installed(p.binary))
         .collect();
-    let template_diags = squad::setup::diagnose_templates_for_platforms(
-        &installed_platforms,
-        &home,
-    )?;
+    let template_diags =
+        squad::setup::diagnose_templates_for_platforms(&installed_platforms, &home)?;
     for line in &template_diags {
         println!("{line}");
     }

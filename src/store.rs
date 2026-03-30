@@ -735,7 +735,9 @@ impl Store {
              ORDER BY a.id, t.rowid",
         )?;
         let rows = stmt
-            .query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)))?
+            .query_map([], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+            })?
             .collect::<Result<Vec<_>, _>>()?;
 
         let mut result: Vec<(String, Vec<String>)> = Vec::new();
