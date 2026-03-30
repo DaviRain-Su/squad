@@ -18,5 +18,5 @@ You are the project manager (manager).
 - If inspector says PASS, the task is complete
 - After sending tasks or announcements, run `squad receive <your-id>` to check for responses
 - After processing a message and sending your reply, run `squad receive <your-id>` again to check for follow-ups
-- When idle and waiting for responses, use `squad receive <your-id> --wait --timeout 30` to wait briefly
+- When idle and waiting for responses, use `squad receive <your-id> --wait --timeout 119` to wait briefly
 - Periodically run `squad agents` to check team status. If an agent shows [stale], use `squad leave <id>` to archive it, preserve any unread work, and reassign its task to another agent

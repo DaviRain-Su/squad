@@ -79,7 +79,7 @@ fn test_install_command_overwrites_existing() {
 fn test_md_content_has_two_phase_structure() {
     assert!(SQUAD_MD_CONTENT.contains("Phase 1"));
     assert!(SQUAD_MD_CONTENT.contains("Phase 2"));
-    assert!(SQUAD_MD_CONTENT.contains("Work Loop"));
+    assert!(SQUAD_MD_CONTENT.contains("Enter Receive Mode"));
 }
 
 #[test]
@@ -88,13 +88,13 @@ fn test_md_content_has_actual_id_instruction() {
 }
 
 #[test]
-fn test_templates_use_one_shot_receive_with_optional_wait() {
-    // Templates should instruct one-shot receive as default
-    assert!(SQUAD_MD_CONTENT.contains("squad receive <your-id>`"));
-    assert!(SQUAD_TOML_CONTENT.contains("squad receive <your-id>`"));
-    // Templates should offer bounded --wait for idle polling
-    assert!(SQUAD_MD_CONTENT.contains("--wait --timeout 30"));
-    assert!(SQUAD_TOML_CONTENT.contains("--wait --timeout 30"));
+fn test_templates_enter_receive_mode_after_setup() {
+    // Templates should mandate entering receive mode immediately after setup
+    assert!(SQUAD_MD_CONTENT.contains("Immediately after setup"));
+    assert!(SQUAD_TOML_CONTENT.contains("Immediately after setup"));
+    // Templates should use bounded --wait with 119s timeout
+    assert!(SQUAD_MD_CONTENT.contains("--wait --timeout 119"));
+    assert!(SQUAD_TOML_CONTENT.contains("--wait --timeout 119"));
 }
 
 #[test]
@@ -109,7 +109,7 @@ fn test_templates_mention_task_commands() {
 fn test_toml_content_has_two_phase_structure() {
     assert!(SQUAD_TOML_CONTENT.contains("Phase 1"));
     assert!(SQUAD_TOML_CONTENT.contains("Phase 2"));
-    assert!(SQUAD_TOML_CONTENT.contains("Work Loop"));
+    assert!(SQUAD_TOML_CONTENT.contains("Enter Receive Mode"));
 }
 
 #[test]

@@ -20,7 +20,7 @@ fn test_builtin_roles_recommend_receive() {
     for role in BUILTIN_ROLES {
         let prompt = default_role_prompt(role).unwrap();
         assert!(prompt.contains("squad receive <your-id>"));
-        assert!(prompt.contains("--wait --timeout 30"));
+        assert!(prompt.contains("--wait --timeout 119"));
     }
 }
 

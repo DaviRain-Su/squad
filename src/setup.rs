@@ -84,17 +84,16 @@ Your join arguments: $ARGUMENTS
 
 6. **If any squad command returns "Session replaced":** another terminal took your ID. Re-join with a different ID (e.g. `squad join worker-2 --role worker --client __SQUAD_CLIENT__ --protocol-version __SQUAD_PROTOCOL_VERSION__`).
 
-## Phase 2: Work Loop
+## Phase 2: Enter Receive Mode (MANDATORY)
 
-Setup is done. After sending a message or completing a task, check for new messages:
+**Immediately after setup, run `squad receive <your-id> --wait --timeout 119` to start listening for messages.** Do NOT wait for the user to tell you — enter receive mode now.
 
-1. Run `squad receive <your-id>` to check for queued messages (returns immediately).
-2. If you received a message:
-   a. Execute the task or respond as appropriate for your role.
-   b. Report results using `squad send` or `squad task` commands.
-3. After completing your work and reporting back, run `squad receive <your-id>` again to check for follow-ups.
+After receiving a message:
+1. Execute the task or respond as appropriate for your role.
+2. Report results using `squad send` or `squad task` commands.
+3. Run `squad receive <your-id> --wait --timeout 119` again to wait for the next message.
 
-When idle and waiting for work, use `squad receive <your-id> --wait --timeout 30` to wait up to 30 seconds for a message.
+If receive times out with no messages, run it again immediately.
 
 Other useful commands:
 - `squad send <your-id> <to> "<message>"` — send a message (use @all to broadcast)
@@ -142,17 +141,16 @@ You are joining a squad multi-agent collaboration team.
 
 6. **If any squad command returns "Session replaced":** another terminal took your ID. Re-join with a different ID (e.g. `squad join worker-2 --role worker --client __SQUAD_CLIENT__ --protocol-version __SQUAD_PROTOCOL_VERSION__`).
 
-## Phase 2: Work Loop
+## Phase 2: Enter Receive Mode (MANDATORY)
 
-Setup is done. After sending a message or completing a task, check for new messages:
+**Immediately after setup, run `squad receive <your-id> --wait --timeout 119` to start listening for messages.** Do NOT wait for the user to tell you — enter receive mode now.
 
-1. Run `squad receive <your-id>` to check for queued messages (returns immediately).
-2. If you received a message:
-   a. Execute the task or respond as appropriate for your role.
-   b. Report results using `squad send` or `squad task` commands.
-3. After completing your work and reporting back, run `squad receive <your-id>` again to check for follow-ups.
+After receiving a message:
+1. Execute the task or respond as appropriate for your role.
+2. Report results using `squad send` or `squad task` commands.
+3. Run `squad receive <your-id> --wait --timeout 119` again to wait for the next message.
 
-When idle and waiting for work, use `squad receive <your-id> --wait --timeout 30` to wait up to 30 seconds for a message.
+If receive times out with no messages, run it again immediately.
 
 Other useful commands:
 - `squad send <your-id> <to> "<message>"` — send a message (use @all to broadcast)
