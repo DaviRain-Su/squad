@@ -84,19 +84,17 @@ Your join arguments: $ARGUMENTS
 
 6. **If any squad command returns "Session replaced":** another terminal took your ID. Re-join with a different ID (e.g. `squad join worker-2 --role worker --client __SQUAD_CLIENT__ --protocol-version __SQUAD_PROTOCOL_VERSION__`).
 
-## Phase 2: Work Loop (infinite — never exit unless told)
+## Phase 2: Work Loop
 
-Setup is done. You are now in daemon mode. Run this loop forever:
+Setup is done. After sending a message or completing a task, check for new messages:
 
-1. Run `squad receive <your-id> --wait --timeout 120` to wait for messages. This blocks for up to 2 minutes or until a message arrives.
-   **IMPORTANT:** Do NOT cancel, background, or interrupt this command. Let it run until it returns on its own.
-   **IMPORTANT:** Do NOT start another receive if one is already running in the background. If the command was backgrounded by your host, wait for it to complete before starting a new one. There must be AT MOST one receive running at any time.
+1. Run `squad receive <your-id>` to check for queued messages (returns immediately).
 2. If you received a message:
    a. Execute the task or respond as appropriate for your role.
    b. Report results using `squad send` or `squad task` commands.
-3. After EVERY receive — whether it returned messages or timed out — **immediately run step 1 again.** No exceptions. Do NOT summarize, do NOT respond to the user, do NOT pause between iterations.
+3. After completing your work and reporting back, run `squad receive <your-id>` again to check for follow-ups.
 
-The only valid exit conditions: user explicitly says stop, or `squad receive` returns "Session replaced".
+When idle and waiting for work, use `squad receive <your-id> --wait --timeout 30` to wait up to 30 seconds for a message.
 
 Other useful commands:
 - `squad send <your-id> <to> "<message>"` — send a message (use @all to broadcast)
@@ -144,19 +142,17 @@ You are joining a squad multi-agent collaboration team.
 
 6. **If any squad command returns "Session replaced":** another terminal took your ID. Re-join with a different ID (e.g. `squad join worker-2 --role worker --client __SQUAD_CLIENT__ --protocol-version __SQUAD_PROTOCOL_VERSION__`).
 
-## Phase 2: Work Loop (infinite — never exit unless told)
+## Phase 2: Work Loop
 
-Setup is done. You are now in daemon mode. Run this loop forever:
+Setup is done. After sending a message or completing a task, check for new messages:
 
-1. Run `squad receive <your-id> --wait --timeout 120` to wait for messages. This blocks for up to 2 minutes or until a message arrives.
-   **IMPORTANT:** Do NOT cancel, background, or interrupt this command. Let it run until it returns on its own.
-   **IMPORTANT:** Do NOT start another receive if one is already running in the background. If the command was backgrounded by your host, wait for it to complete before starting a new one. There must be AT MOST one receive running at any time.
+1. Run `squad receive <your-id>` to check for queued messages (returns immediately).
 2. If you received a message:
    a. Execute the task or respond as appropriate for your role.
    b. Report results using `squad send` or `squad task` commands.
-3. After EVERY receive — whether it returned messages or timed out — **immediately run step 1 again.** No exceptions. Do NOT summarize, do NOT respond to the user, do NOT pause between iterations.
+3. After completing your work and reporting back, run `squad receive <your-id>` again to check for follow-ups.
 
-The only valid exit conditions: user explicitly says stop, or `squad receive` returns "Session replaced".
+When idle and waiting for work, use `squad receive <your-id> --wait --timeout 30` to wait up to 30 seconds for a message.
 
 Other useful commands:
 - `squad send <your-id> <to> "<message>"` — send a message (use @all to broadcast)

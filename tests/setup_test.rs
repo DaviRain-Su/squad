@@ -88,13 +88,13 @@ fn test_md_content_has_actual_id_instruction() {
 }
 
 #[test]
-fn test_templates_use_bounded_wait_receive_guidance() {
-    // Templates should instruct bounded --wait with --timeout 120
-    assert!(SQUAD_MD_CONTENT.contains("squad receive <your-id> --wait --timeout 120"));
-    assert!(SQUAD_TOML_CONTENT.contains("squad receive <your-id> --wait --timeout 120"));
-    // Templates should warn against concurrent receives
-    assert!(SQUAD_MD_CONTENT.contains("AT MOST one receive running at any time"));
-    assert!(SQUAD_TOML_CONTENT.contains("AT MOST one receive running at any time"));
+fn test_templates_use_one_shot_receive_with_optional_wait() {
+    // Templates should instruct one-shot receive as default
+    assert!(SQUAD_MD_CONTENT.contains("squad receive <your-id>`"));
+    assert!(SQUAD_TOML_CONTENT.contains("squad receive <your-id>`"));
+    // Templates should offer bounded --wait for idle polling
+    assert!(SQUAD_MD_CONTENT.contains("--wait --timeout 30"));
+    assert!(SQUAD_TOML_CONTENT.contains("--wait --timeout 30"));
 }
 
 #[test]
