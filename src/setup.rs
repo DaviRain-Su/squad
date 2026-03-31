@@ -86,12 +86,12 @@ Your join arguments: $ARGUMENTS
 
 ## Phase 2: Enter Receive Mode (MANDATORY)
 
-**Immediately after setup, run `squad receive <your-id> --wait --timeout 119` to start listening for messages.** Do NOT wait for the user to tell you — enter receive mode now.
+**Immediately after setup, run `squad receive <your-id> --wait` to start listening for messages.** Do NOT wait for the user to tell you — enter receive mode now.
 
 After receiving a message:
 1. Execute the task or respond as appropriate for your role.
 2. Report results using `squad send` or `squad task` commands.
-3. Run `squad receive <your-id> --wait --timeout 119` again to wait for the next message.
+3. Run `squad receive <your-id> --wait` again to wait for the next message.
 
 If receive times out with no messages, run it again immediately.
 
@@ -143,12 +143,12 @@ You are joining a squad multi-agent collaboration team.
 
 ## Phase 2: Enter Receive Mode (MANDATORY)
 
-**Immediately after setup, run `squad receive <your-id> --wait --timeout 119` to start listening for messages.** Do NOT wait for the user to tell you — enter receive mode now.
+**Immediately after setup, run `squad receive <your-id> --wait` to start listening for messages.** Do NOT wait for the user to tell you — enter receive mode now.
 
 After receiving a message:
 1. Execute the task or respond as appropriate for your role.
 2. Report results using `squad send` or `squad task` commands.
-3. Run `squad receive <your-id> --wait --timeout 119` again to wait for the next message.
+3. Run `squad receive <your-id> --wait` again to wait for the next message.
 
 If receive times out with no messages, run it again immediately.
 

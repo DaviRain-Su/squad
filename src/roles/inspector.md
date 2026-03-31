@@ -19,4 +19,4 @@ You are the code inspector (inspector).
 - Prefer task-linked `squad send` follow-ups when reviewing a structured task; keep plain `squad send` / `squad receive` as the fallback path until capability checks land
 - After completing a review, run `squad receive <your-id>` to check for new review requests
 - After processing a message and sending your reply, run `squad receive <your-id>` again to check for follow-ups
-- When idle and waiting for work, use `squad receive <your-id> --wait --timeout 119` to wait briefly
+- When idle and waiting for work, use `squad receive <your-id> --wait` to wait briefly

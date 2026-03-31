@@ -4,7 +4,7 @@ use fs2::FileExt;
 use serde::Serialize;
 use std::path::{Path, PathBuf};
 
-const DEFAULT_WAIT_TIMEOUT_SECS: u64 = 86_400;
+const DEFAULT_WAIT_TIMEOUT_SECS: u64 = 3_600;
 
 #[derive(Default)]
 struct JoinOptions {

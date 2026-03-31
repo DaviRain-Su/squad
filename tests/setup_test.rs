@@ -92,9 +92,9 @@ fn test_templates_enter_receive_mode_after_setup() {
     // Templates should mandate entering receive mode immediately after setup
     assert!(SQUAD_MD_CONTENT.contains("Immediately after setup"));
     assert!(SQUAD_TOML_CONTENT.contains("Immediately after setup"));
-    // Templates should use bounded --wait with 119s timeout
-    assert!(SQUAD_MD_CONTENT.contains("--wait --timeout 119"));
-    assert!(SQUAD_TOML_CONTENT.contains("--wait --timeout 119"));
+    // Templates should use --wait without explicit timeout (let platform control the cycle)
+    assert!(SQUAD_MD_CONTENT.contains("receive <your-id> --wait`"));
+    assert!(SQUAD_TOML_CONTENT.contains("receive <your-id> --wait`"));
 }
 
 #[test]
